@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f4f8f6;
+  --text: #000000;
+  --text-soft: #000000;
+  --text-muted: #555555;
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 8px 32px rgba(91, 155, 213, 0.08);
+  --primary: #5b9bd5;
+  --secondary: #6baf8d;
+  --tag-bg: rgba(91, 155, 213, 0.12);
+  --tag-text: #4a7fa8;
+  --radius: 16px;
+  --radius-btn: 28px;
+  --input-bg: #ececec;
+  --input-border: #d4dcd8;
+  --input-text: #000000;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1614;
+  --text: #ffffff;
+  --text-soft: #ffffff;
+  --text-muted: #a0a0a0;
+  --glass-bg: rgba(20, 32, 28, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --primary: #7bb5e0;
+  --secondary: #8bc5a5;
+  --tag-bg: rgba(123, 181, 224, 0.15);
+  --tag-text: #7bb5e0;
+  --input-bg: #1a2420;
+  --input-border: #2a3530;
+  --input-text: #ffffff;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(91, 155, 213, 0.15);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border-radius: var(--radius-btn);
+  padding: 12px 28px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(91, 155, 213, 0.3);
+}
+
+.btn-outline {
+  border: 2px solid var(--primary);
+  color: var(--primary);
+  border-radius: var(--radius-btn);
+  padding: 12px 28px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn-outline:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+}
+
+.tag {
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
