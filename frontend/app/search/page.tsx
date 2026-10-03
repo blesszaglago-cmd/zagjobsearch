@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { API_URL } from "../../lib/api";
 
 type Job = {
   id: string;
@@ -46,7 +47,7 @@ function SearchContent() {
         remote: String(remote),
       });
 
-      const res = await fetch(`http://127.0.0.1:8000/search?${params.toString()}`);
+      const res = await fetch(`${API_URL}/search?${params.toString()}`);
       const data = await res.json();
 
       if (!res.ok) {
