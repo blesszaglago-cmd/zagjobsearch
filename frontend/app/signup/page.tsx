@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { API_URL } from "../../lib/api";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -47,22 +49,25 @@ export default function SignupPage() {
       }
 
       setStatus("success");
-      setMessage("Account created. You can now log in.");
+      setMessage("Account created. Redirecting to login...");
+      setTimeout(() => {
+        router.push("/login");
+      }, 1500);
     } catch {
       setStatus("error");
       setMessage("Something went wrong. Try again.");
     }
   };
 
-const inputStyle = {
-  width: "100%",
-  background: "var(--input-bg)",
-  border: "1px solid var(--input-border)",
-  borderRadius: "12px",
-  padding: "10px 14px",
-  color: "var(--input-text)",
-  outline: "none",
-};
+  const inputStyle = {
+    width: "100%",
+    background: "var(--input-bg)",
+    border: "1px solid var(--input-border)",
+    borderRadius: "12px",
+    padding: "10px 14px",
+    color: "var(--input-text)",
+    outline: "none",
+  };
 
   const labelStyle = {
     display: "block",

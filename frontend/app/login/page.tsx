@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { API_URL } from "../../lib/api";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -35,22 +37,37 @@ export default function LoginPage() {
       }
 
       setStatus("success");
-      setMessage(`Welcome back, ${data.full_name}.`);
+      setMessage(`Welcome back, ${data.full_name}. Redirecting...`);
+
+      // Save the user locally so we can show it on other pages
+      localStorage.setItem(
+        "user",
+        JSON.stringify({
+          user_id: data.user_id,
+          email: data.email,
+          full_name: data.full_name,
+          country: data.country,
+        })
+      );
+
+      setTimeout(() => {
+        router.push("/search");
+      }, 1500);
     } catch {
       setStatus("error");
       setMessage("Something went wrong. Try again.");
     }
   };
 
-const inputStyle = {
-  width: "100%",
-  background: "var(--input-bg)",
-  border: "1px solid var(--input-border)",
-  borderRadius: "12px",
-  padding: "10px 14px",
-  color: "var(--input-text)",
-  outline: "none",
-};
+  const inputStyle = {
+    width: "100%",
+    background: "var(--input-bg)",
+    border: "1px solid var(--input-border)",
+    borderRadius: "12px",
+    padding: "10px 14px",
+    color: "var(--input-text)",
+    outline: "none",
+  };
 
   const labelStyle = {
     display: "block",
