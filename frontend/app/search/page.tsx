@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import { useEffect, useState, Suspense, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -95,9 +96,9 @@ function SearchContent() {
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-3 flex justify-between items-center">
-          <Link href="/" className="text-xl font-bold" style={{ color: "var(--text)" }}>
-            ZAGJobSearch
-          </Link>
+          <div className="flex justify-center mb-8">
+            <Logo />
+          </div>
           <div className="flex gap-3 items-center">
             <Link href="/login" className="text-sm px-4 py-2" style={{ color: "var(--text-soft)" }}>
               Log in

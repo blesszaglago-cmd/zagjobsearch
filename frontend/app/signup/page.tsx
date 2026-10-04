@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_URL } from "../../lib/api";
+import Logo from "@/components/Logo";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -79,9 +80,9 @@ export default function SignupPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
-        <Link href="/" className="block text-center text-2xl font-bold mb-8" style={{ color: "var(--text)" }}>
-          ZAGJobSearch
-        </Link>
+        <div className="flex justify-center mb-8">
+          <Logo />
+        </div>
 
         <div className="glass-card p-8">
           <h1 className="text-2xl font-bold mb-6">Create your account</h1>

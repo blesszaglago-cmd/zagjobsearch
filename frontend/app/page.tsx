@@ -2,18 +2,19 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Logo from "@/components/Logo";
 
 export default function Home() {
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-  if (typeof window === "undefined") return "dark";
-  const saved = localStorage.getItem("theme") as "light" | "dark" | null;
-  return saved || "dark";
-});
+    if (typeof window === "undefined") return "dark";
+    const saved = localStorage.getItem("theme") as "light" | "dark" | null;
+    return saved || "dark";
+  });
 
-useEffect(() => {
-  document.documentElement.setAttribute("data-theme", theme);
-}, [theme]);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -35,9 +36,7 @@ useEffect(() => {
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-3 flex justify-between items-center">
-          <Link href="/" className="text-xl font-bold" style={{ color: "var(--text)" }}>
-            ZAGJobSearch
-          </Link>
+          <Logo />
           <div className="flex gap-3 items-center">
             <button
               onClick={toggleTheme}
