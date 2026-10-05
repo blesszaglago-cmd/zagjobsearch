@@ -8,7 +8,7 @@ Aggregates job listings from multiple sources.
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import httpx
+import os
 
 from job_sources.adzuna import AdzunaClient
 from job_sources.himalayas import HimalayasClient
@@ -40,7 +40,7 @@ app.add_middleware(
 )
 
 # Initialize clients
-adzuna = AdzunaClient()
+adzuna = AdzunaClient() if os.getenv("ADZUNA_APP_ID") and os.getenv("ADZUNA_APP_KEY") else None
 himalayas = HimalayasClient()
 
 
@@ -70,7 +70,11 @@ async def search_jobs(
     - Himalayas: Remote jobs (global, no key)
     - Adzuna: Local jobs (18 countries, requires key)
     """
-    african_countries = {"gh", "ng", "ke", "za", "ug", "tz", "rw"}
+    q = q.strip()
+    country = country.lower()
+    if not q or len(q) > 200 or len(country) != 2 or not country.isalpha():
+        raise HTTPException(status_code=400, detail="Enter keywords and a two-letter country code.")
+    supported_countries = {"at", "au", "be", "br", "ca", "ch", "de", "es", "fr", "gb", "in", "it", "mx", "nl", "nz", "pl", "sg", "us", "za"}
 
     jobs = []
     errors = []
@@ -85,10 +89,10 @@ async def search_jobs(
         )
         jobs.extend(result["jobs"])
     except Exception as e:
-        errors.append(f"Himalayas: {str(e)}")
+        errors.append("Himalayas temporarily unavailable")
 
-    # If not African country and not forcing remote, also query Adzuna
-    if country.lower() not in african_countries and not remote:
+    # Query local listings only in supported countries, including South Africa.
+    if adzuna is not None and country in supported_countries and not remote:
         try:
             result = await adzuna.search(
                 query=q,
@@ -99,7 +103,7 @@ async def search_jobs(
             for job in result.get("results", []):
                 jobs.append(
                     {
-                        "id": job.get("id"),
+                        "id": f"adzuna:{job.get('id')}",
                         "title": job.get("title"),
                         "company": job.get("company", {}).get("display_name"),
                         "location": job.get("location", {}).get("display_name"),
@@ -112,7 +116,7 @@ async def search_jobs(
                     }
                 )
         except Exception as e:
-            errors.append(f"Adzuna: {str(e)}")
+            errors.append("Adzuna temporarily unavailable")
 
     return {
         "query": q,

@@ -7,6 +7,7 @@ Docs: https://himalayas.app/docs/remote-jobs-api
 """
 
 import httpx
+from datetime import datetime, timezone
 
 
 HIMALAYAS_BASE_URL = "https://himalayas.app/jobs/api"
@@ -65,14 +66,22 @@ class HimalayasClient:
             # Get location restrictions
             restrictions = job.get("locationRestrictions") or []
             if restrictions:
-                location_names = [r.get("name", "") for r in restrictions if isinstance(r, dict)]
-                location = ", ".join(location_names) if location_names else "Worldwide"
+                location_names = [r if isinstance(r, str) else r.get("name", "") for r in restrictions if isinstance(r, (str, dict))]
+                location = ", ".join(location_names) if location_names else "See posting for restrictions"
             else:
                 location = "Worldwide"
 
+            expiry = job.get("expiryDate")
+            if expiry:
+                try:
+                    expiry_dt = datetime.fromtimestamp(float(expiry), timezone.utc) if isinstance(expiry, (int, float)) else datetime.fromisoformat(str(expiry).replace("Z", "+00:00"))
+                    if expiry_dt.replace(tzinfo=expiry_dt.tzinfo or timezone.utc) < datetime.now(timezone.utc):
+                        continue
+                except (ValueError, OverflowError, OSError):
+                    pass
             jobs.append(
                 {
-                    "id": job.get("guid"),
+                    "id": f"himalayas:{job.get('guid')}",
                     "title": job.get("title"),
                     "company": job.get("companyName"),
                     "location": location,
@@ -81,6 +90,9 @@ class HimalayasClient:
                     "created": job.get("pubDate"),
                     "salary_min": job.get("minSalary"),
                     "salary_max": job.get("maxSalary"),
+                    "salary_currency": job.get("currency"),
+                    "salary_period": job.get("salaryPeriod"),
+                    "deadline": expiry,
                     "source": "himalayas",
                     "remote": True,
                 }

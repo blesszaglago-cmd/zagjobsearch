@@ -51,7 +51,10 @@ export default function LoginPage() {
       );
 
       setTimeout(() => {
-        router.push("/search");
+        const pending = sessionStorage.getItem("zagjobsearch-pending-application");
+        sessionStorage.removeItem("zagjobsearch-pending-application");
+        if (pending && /^https?:\/\//i.test(pending)) window.location.assign(pending);
+        else router.push("/search");
       }, 1500);
     } catch {
       setStatus("error");
@@ -77,24 +80,24 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 py-12">
+    <main id="main-content" className="auth-page min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <Logo />
         </div>
 
-        <div className="glass-card p-8">
+        <div className="surface-card p-8">
           <h1 className="text-2xl font-bold mb-6">Log in to your account</h1>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label style={labelStyle}>Email</label>
-              <input name="email" type="email" value={form.email} onChange={handleChange} required style={inputStyle} />
+              <label htmlFor="email" style={labelStyle}>Email</label>
+              <input id="email" name="email" type="email" value={form.email} onChange={handleChange} required style={inputStyle} />
             </div>
 
             <div>
-              <label style={labelStyle}>Password</label>
-              <input name="password" type="password" value={form.password} onChange={handleChange} required style={inputStyle} />
+              <label htmlFor="password" style={labelStyle}>Password</label>
+              <input id="password" name="password" type="password" value={form.password} onChange={handleChange} required style={inputStyle} />
             </div>
 
             <button type="submit" disabled={status === "loading"} className="btn-primary w-full">

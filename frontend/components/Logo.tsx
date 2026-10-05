@@ -1,23 +1,2 @@
 import Link from "next/link";
-
-export default function Logo() {
-  return (
-    <Link href="/" className="flex items-center gap-2 group">
-      <span
-        className="w-8 h-8 rounded-md flex items-center justify-center text-sm font-bold transition-transform group-hover:scale-105"
-        style={{
-          background: "var(--primary)",
-          color: "#ffffff",
-        }}
-      >
-        Z
-      </span>
-      <span
-        className="text-xl font-bold tracking-tight"
-        style={{ color: "var(--text)" }}
-      >
-        ZAG<span style={{ color: "var(--primary)" }}>JobSearch</span>
-      </span>
-    </Link>
-  );
-}
+export default function Logo(){return <Link href="/" className="brand" aria-label="ZagJobSearch home"><svg viewBox="0 0 36 36" width="34" height="34" aria-hidden="true"><rect width="36" height="36" rx="18" fill="currentColor"/><path d="M12 12h12L12 24h12" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M22 10h4v4" fill="none" stroke="#cedacf" strokeWidth="2" strokeLinecap="round"/></svg><span>ZagJobSearch<span className="brand-dot">.</span></span></Link>}
