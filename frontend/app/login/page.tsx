@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_URL } from "../../lib/api";
+
 import Logo from "@/components/Logo";
 
 export default function LoginPage() {
@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const oauthError=useSyncExternalStore(()=>()=>{},()=>new URLSearchParams(window.location.search).get("error")||"",()=>"");
+  const oauthMessage=oauthError==="google_setup"?"Google sign-in is awaiting configuration. Use email and password for now.":oauthError?"Google sign-in could not be completed. Create your account with this email first, or use email and password.":"";
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -23,7 +25,7 @@ export default function LoginPage() {
     setMessage("");
 
     try {
-      const res = await fetch(`${API_URL}/login`, {
+      const res = await fetch("/api/account/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -40,19 +42,7 @@ export default function LoginPage() {
       setStatus("success");
       setMessage(`Welcome back, ${data.full_name}. Redirecting...`);
 
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          user_id: data.user_id,
-          email: data.email,
-          full_name: data.full_name,
-          country: data.country,
-        })
-      );
-
-      setTimeout(() => {
-        router.push("/search");
-      }, 1500);
+      router.push("/tracker");
     } catch {
       setStatus("error");
       setMessage("Something went wrong. Try again.");
@@ -77,24 +67,25 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 py-12">
+    <main id="main-content" className="auth-page min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <Logo />
         </div>
 
-        <div className="glass-card p-8">
+        <div className="surface-card p-8">
           <h1 className="text-2xl font-bold mb-6">Log in to your account</h1>
 
+          <Link prefetch={false} href="/api/account/google" className="btn-outline google-login">Continue with Google</Link>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label style={labelStyle}>Email</label>
-              <input name="email" type="email" value={form.email} onChange={handleChange} required style={inputStyle} />
+              <label htmlFor="email" style={labelStyle}>Email</label>
+              <input id="email" name="email" type="email" value={form.email} onChange={handleChange} required style={inputStyle} />
             </div>
 
             <div>
-              <label style={labelStyle}>Password</label>
-              <input name="password" type="password" value={form.password} onChange={handleChange} required style={inputStyle} />
+              <label htmlFor="password" style={labelStyle}>Password</label>
+              <input id="password" name="password" type="password" value={form.password} onChange={handleChange} required style={inputStyle} />
             </div>
 
             <button type="submit" disabled={status === "loading"} className="btn-primary w-full">
@@ -102,7 +93,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {message && (
+          {(message || oauthMessage) && (
             <p className="mt-4 text-sm" style={{ color: status === "success" ? "var(--secondary)" : "#ff6b6b" }}>
               {message}
             </p>

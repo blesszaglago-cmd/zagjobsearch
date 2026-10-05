@@ -1,29 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { siteUrl } from "@/lib/site";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "ZAGJobSearch — Find your next role",
-  description: "Search jobs from multiple sources in one place. Apply directly at the source. Free forever.",
+ metadataBase: new URL(siteUrl),
+ title: {default: "ZagJobSearch | Jobs, Application Tracker & CV Help", template: "%s | ZagJobSearch"},
+ description: "Find jobs in Ghana and worldwide with ZagJobSearch. Explore real listings, track your applications, and tailor your CV using your verified experience.",
+ applicationName: "ZagJobSearch",
+ openGraph: {type:"website",siteName:"ZagJobSearch",title:"ZagJobSearch | Your next move",description:"Discover local and remote jobs in one place. Search freely. Apply directly.",images:[{url:"/opengraph-image",width:1200,height:630,alt:"ZagJobSearch, your next move"}]},
+ twitter: {card:"summary_large_image",title:"ZagJobSearch | Your next move",description:"Discover local and remote jobs in one place.",images:["/opengraph-image"]},
+ robots: {index:true,follow:true},
+ verification: {google:process.env.GOOGLE_SITE_VERIFICATION},
 };
-
-export default function RootLayout({ children }: LayoutProps<"/">) {
-  return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
-  );
-}
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><a className="skip-link" href="#main-content">Skip to content</a>{children}</body></html>}

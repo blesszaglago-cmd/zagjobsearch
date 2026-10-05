@@ -1,237 +1,65 @@
 "use client";
 
-import Logo from "@/components/Logo";
-import { useEffect, useState, Suspense, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import {countries} from "@/lib/countries";
+import {Job,listingTypes} from "@/lib/jobs";
 import Link from "next/link";
-import { API_URL } from "../../lib/api";
-
-type Job = {
-  id: string;
-  title: string;
-  company: string | null;
-  location: string | null;
-  description: string;
-  url: string;
-  created: string | number | null;
-  salary_min: number | null;
-  salary_max: number | null;
-  source: string;
-  remote?: boolean;
-};
 
 function SearchContent() {
-  const searchParams = useSearchParams();
-  const initialQuery = searchParams.get("q") || "";
-
-  const [query, setQuery] = useState(initialQuery);
-  const [country, setCountry] = useState("gh");
-  const [remote, setRemote] = useState(false);
+  const params = useSearchParams();
+  const router = useRouter();
+  const q = params.get("q") || "";
+  const selectedCountry = params.get("country") || "gh";
+  const remoteOnly = params.get("remote") === "true";
+  const page = Math.max(1, Math.min(10, Number(params.get("page")) || 1));
+  const [query, setQuery] = useState(q);
+  const [country, setCountry] = useState(selectedCountry);
+  const [jobType,setJobType]=useState(params.get("job_type")||"all"),[experience,setExperience]=useState(params.get("experience")||""),[industry,setIndustry]=useState(params.get("industry")||""),[salary,setSalary]=useState(params.get("salary_min")||""),[currency,setCurrency]=useState(params.get("currency")||"USD"),[period,setPeriod]=useState(params.get("salary_period")||"annual");
+  const activeType=params.get("job_type")||"all";
+  const filterString=params.toString();
+  const [remote, setRemote] = useState(remoteOnly);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const hasAutoSearched = useRef(false);
-
-  const runSearch = useCallback(async () => {
-    if (!query.trim()) return;
-    setLoading(true);
-    setError("");
-    setSearched(true);
-
-    try {
-      const params = new URLSearchParams({
-        q: query,
-        country: country,
-        page: "1",
-        remote: String(remote),
-      });
-
-      const res = await fetch(`${API_URL}/search?${params.toString()}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.detail || "Search failed.");
-        setJobs([]);
-        return;
-      }
-
-      setJobs(data.jobs || []);
-    } catch {
-      setError("Something went wrong. Try again.");
-      setJobs([]);
-    } finally {
+  const [warning, setWarning] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    async function search() {
+      setLoading(true); setError(""); setWarning("");
+      try {
+        const response=await fetch(`/api/jobs?${filterString}`,{signal:controller.signal});
+        const data=await response.json();
+        if(controller.signal.aborted)return;
+        setJobs(data.jobs||[]);
+        if(data.errors?.length)setWarning(`Some sources are unavailable: ${data.errors.join(', ')}. Showing available listings.`);
+      }catch{if(!controller.signal.aborted)setError('Search is temporarily unavailable. Please try again.');}
       setLoading(false);
     }
-  }, [query, country, remote]);
-
-  // Auto-search only once when the page loads with a query
-  useEffect(() => {
-    if (initialQuery && !hasAutoSearched.current) {
-      hasAutoSearched.current = true;
-      runSearch();
-    }
-  }, [initialQuery, runSearch]);
-
-  const inputStyle = {
-    width: "100%",
-    background: "var(--input-bg)",
-    border: "1px solid var(--input-border)",
-    borderRadius: "12px",
-    padding: "10px 14px",
-    color: "var(--input-text)",
-    outline: "none",
-  };
-
-  return (
-    <main className="min-h-screen">
-      <nav
-        className="sticky top-0 z-50 border-b"
-        style={{
-          background: "var(--glass-bg)",
-          borderColor: "var(--glass-border)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-6 py-3 flex justify-between items-center">
-          <div className="flex justify-center mb-8">
-            <Logo />
-          </div>
-          <div className="flex gap-3 items-center">
-            <Link href="/login" className="text-sm px-4 py-2" style={{ color: "var(--text-soft)" }}>
-              Log in
-            </Link>
-            <Link href="/signup" className="btn-primary text-sm">
-              Sign up
-            </Link>
-          </div>
-        </div>
-      </nav>
-
-      <section className="max-w-6xl mx-auto px-6 py-8">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            runSearch();
-          }}
-          className="flex flex-col gap-4"
-        >
-          <div className="flex flex-col md:flex-row gap-3">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Job title or keywords"
-              style={{ ...inputStyle, flex: 1 }}
-            />
-
-            <select value={country} onChange={(e) => setCountry(e.target.value)} style={inputStyle}>
-              <option value="gh">Ghana</option>
-              <option value="ng">Nigeria</option>
-              <option value="ke">Kenya</option>
-              <option value="za">South Africa</option>
-              <option value="us">United States</option>
-              <option value="gb">United Kingdom</option>
-              <option value="ca">Canada</option>
-              <option value="de">Germany</option>
-              <option value="fr">France</option>
-              <option value="in">India</option>
-              <option value="au">Australia</option>
-            </select>
-
-            <button type="submit" disabled={loading} className="btn-primary">
-              {loading ? "Searching..." : "Search"}
-            </button>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-soft)" }}>
-            <input type="checkbox" checked={remote} onChange={(e) => setRemote(e.target.checked)} />
-            Only remote jobs
-          </label>
-        </form>
+    void search();
+    return () => controller.abort();
+  }, [filterString]);
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    router.push(`/search?${new URLSearchParams({ q: query.trim(), country, remote: String(remote),job_type:jobType,experience,industry,salary_min:salary,currency,salary_period:period })}`);
+  }
+  function detailLink(job:Job){return `/jobs/${encodeURIComponent(job.id)}?${params.toString()}`;}
+  function pageLink(next:number){const nextParams=new URLSearchParams(params.toString());nextParams.set('page',String(next));return `/search?${nextParams}`;}
+  return <><Header /><main id="main-content" className="shell">
+    <section className="search-banner"><span className="eyebrow">A LITTLE CLOSER TO YOUR NEXT CHAPTER</span><h1>Find a role that fits you.</h1><p>Search available jobs. Check the details. Apply on the original website.</p></section>
+    <nav className="listing-tabs" aria-label="Listing types">{listingTypes.map(([value,label])=><button key={value} aria-pressed={activeType===value} onClick={()=>{setJobType(value);const next=new URLSearchParams(params.toString());next.set('job_type',value);next.delete('page');router.push(`/search?${next}`)}}>{label}</button>)}</nav>
+    <form onSubmit={submit} className="search-layout">
+      <aside className="filter-sidebar"><h2>Refine your search</h2><label className="field-label" htmlFor="country">Your country</label><select id="country" value={country} onChange={e => setCountry(e.target.value)}>{countries.map(([code, name]) => <option value={code} key={code}>{name}</option>)}</select><label className="checkbox-label remote-filter"><input type="checkbox" checked={remote} onChange={e => setRemote(e.target.checked)} />Remote jobs only</label><label className="field-label" htmlFor="experience">Experience</label><select id="experience" value={experience} onChange={e=>setExperience(e.target.value)}><option value="">All levels</option><option value="entry">Entry level</option><option value="mid">Mid level</option><option value="senior">Senior</option><option value="manager">Management</option></select><label className="field-label" htmlFor="industry">Industry or field</label><input id="industry" value={industry} onChange={e=>setIndustry(e.target.value)} placeholder="Any industry"/><label className="field-label" htmlFor="salary">Minimum salary</label><input id="salary" type="number" min="0" value={salary} onChange={e=>setSalary(e.target.value)}/><label className="field-label" htmlFor="currency">Currency</label><input id="currency" value={currency} onChange={e=>setCurrency(e.target.value.toUpperCase())} maxLength={3}/><label className="field-label" htmlFor="period">Salary period</label><select id="period" value={period} onChange={e=>setPeriod(e.target.value)}>{['annual','yearly','monthly','weekly','hourly'].map(p=><option key={p}>{p}</option>)}</select><button className="btn-primary" type="submit" disabled={loading}>Update results</button><p className="filter-note">Remote roles may have location restrictions. Always check your eligibility on the posting.</p></aside>
+      <section className="results-panel" aria-busy={loading}><div className="results-search"><label className="sr-only" htmlFor="keywords">Job title or keywords</label><input id="keywords" value={query} onChange={e => setQuery(e.target.value)} placeholder="Job title or keywords" maxLength={200} /><button type="submit" className="btn-primary" disabled={loading}>Search ↗</button></div>
+        <div role="status" aria-live="polite" className="results-count">{loading ? "Searching job sources…" : `${jobs.length} results on page ${page}`}</div>
+        {warning && <p className="source-warning">{warning}</p>}{error && <p role="alert" className="search-error">{error}</p>}
+        {!loading && jobs.map(job => <article key={`${job.source}:${job.id}`} className="job-row"><div className="job-mark" aria-hidden="true">{(job.company || "J").slice(0, 1)}</div><div className="job-main"><h2><Link href={detailLink(job)}>{job.title}</Link></h2><p className="job-company">{job.company || "Company not supplied"} · {job.location || "Location not supplied"}</p><p className="job-description">{job.description.slice(0,300)}</p><div className="job-tags"><span className="tag">{job.source === "jobicy" ? <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a> : job.source}</span>{job.remote && <span className="tag mint">Remote</span>}{job.salary_min != null && <span className="tag">{job.salary_currency || ""} {Number(job.salary_min).toLocaleString()}{job.salary_max != null ? ` – ${Number(job.salary_max).toLocaleString()}` : "+"}{job.salary_period ? ` / ${job.salary_period}` : ""}</span>}</div></div><div className="job-actions"><Link href={detailLink(job)} className="btn-primary">View role ↗</Link><small>Details and application link</small></div></article>)}
+        {!loading && !error && jobs.length === 0 && <div className="empty-state"><span aria-hidden="true">⌕</span><h2>{q ? "Let’s try a different search." : "What would you like to do next?"}</h2><p>{q ? "Try a broader job title or another country. Coverage depends on the available sources." : "Enter a role or skill to discover real jobs."}</p></div>}
+        {!loading && <div className="pagination"><button type="button" className="btn-outline" disabled={page === 1} onClick={() => router.push(pageLink(page-1))}>Previous</button><span>Page {page}</span><button type="button" className="btn-outline" disabled={page >= 10 || jobs.length === 0} onClick={() => router.push(pageLink(page+1))}>Next</button></div>}
       </section>
-
-      <section className="max-w-6xl mx-auto px-6 pb-16">
-        {error && (
-          <div className="glass-card p-4 mb-4" style={{ borderColor: "#ff6b6b", color: "#ff6b6b" }}>
-            {error}
-          </div>
-        )}
-
-        {loading && (
-          <p className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-            Loading jobs...
-          </p>
-        )}
-
-        {!loading && searched && jobs.length === 0 && !error && (
-          <p className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-            No jobs found. Try a different keyword or country.
-          </p>
-        )}
-
-        {!loading && jobs.length > 0 && (
-          <>
-            <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-              {jobs.length} jobs found
-            </p>
-            <div className="space-y-4">
-              {jobs.map((job) => (
-                <div key={job.id} className="glass-card p-6">
-                  <div className="flex justify-between items-start gap-4 flex-wrap">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-semibold">{job.title}</h3>
-                      <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-                        {job.company || "Unknown company"}
-                        {job.location && ` · ${job.location}`}
-                      </p>
-                      {job.description && (
-                        <p className="text-sm mt-3 line-clamp-2" style={{ color: "var(--text-soft)" }}>
-                          {job.description}
-                        </p>
-                      )}
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        <span className="tag">{job.source}</span>
-                        {job.remote && <span className="tag">Remote</span>}
-                        {job.salary_min && job.salary_max && (
-                          <span className="tag">
-                            {Math.round(job.salary_min).toLocaleString()} – {Math.round(job.salary_max).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <a
-                      href={job.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-primary text-sm whitespace-nowrap"
-                    >
-                      Apply
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {!searched && (
-          <p className="text-center py-16" style={{ color: "var(--text-muted)" }}>
-            Search for jobs to get started.
-          </p>
-        )}
-      </section>
-    </main>
-  );
+    </form>
+  </main><Footer /></>;
 }
-
-export default function SearchPage() {
-  return (
-    <Suspense fallback={<p className="text-center py-12" style={{ color: "var(--text-muted)" }}>Loading...</p>}>
-      <SearchContent />
-    </Suspense>
-  );
-}
+export default function SearchPage() { return <Suspense fallback={<p className="empty-state">Loading search…</p>}><SearchContent /></Suspense>; }

@@ -7,6 +7,8 @@ Handles signup validation, password hashing, and user creation in Supabase.
 
 import hashlib
 import secrets
+import hmac
+from sessions import issue_session
 from datetime import date
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -82,7 +84,7 @@ def verify_password(password: str, stored: str) -> bool:
     except ValueError:
         return False
 
-    return hash_password(password, salt) == stored 
+    return hmac.compare_digest(hash_password(password, salt), stored)
 
 class LoginRequest(BaseModel):
     """Request model for user login."""
@@ -93,6 +95,7 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     """Response model for successful login."""
+    access_token: str
     user_id: str
     email: str
     full_name: str
@@ -123,6 +126,7 @@ def login_user(data: LoginRequest) -> LoginResponse:
         raise ValueError("Invalid email or password")
 
     return LoginResponse(
+        access_token=issue_session(user["id"]),
         user_id=user["id"],
         email=user["email"],
         full_name=user["full_name"],

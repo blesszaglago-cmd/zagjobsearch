@@ -7,6 +7,7 @@ Docs: https://himalayas.app/docs/remote-jobs-api
 """
 
 import httpx
+from datetime import datetime, timezone
 
 
 HIMALAYAS_BASE_URL = "https://himalayas.app/jobs/api"
@@ -22,6 +23,8 @@ class HimalayasClient:
         page: int = 1,
         results_per_page: int = 20,
         worldwide_only: bool = False,
+        employment_type: str = "",
+        seniority: str = "",
     ) -> dict:
         """
         Search remote jobs on Himalayas.
@@ -43,6 +46,8 @@ class HimalayasClient:
             "limit": min(results_per_page, 20),
         }
 
+        if employment_type: params["employment_type"] = employment_type
+        if seniority: params["seniority"] = seniority
         if query:
             params["q"] = query
 
@@ -65,22 +70,36 @@ class HimalayasClient:
             # Get location restrictions
             restrictions = job.get("locationRestrictions") or []
             if restrictions:
-                location_names = [r.get("name", "") for r in restrictions if isinstance(r, dict)]
-                location = ", ".join(location_names) if location_names else "Worldwide"
+                location_names = [r if isinstance(r, str) else r.get("name", "") for r in restrictions if isinstance(r, (str, dict))]
+                location = ", ".join(location_names) if location_names else "See posting for restrictions"
             else:
                 location = "Worldwide"
 
+            expiry = job.get("expiryDate")
+            if expiry:
+                try:
+                    expiry_dt = datetime.fromtimestamp(float(expiry), timezone.utc) if isinstance(expiry, (int, float)) else datetime.fromisoformat(str(expiry).replace("Z", "+00:00"))
+                    if expiry_dt.replace(tzinfo=expiry_dt.tzinfo or timezone.utc) < datetime.now(timezone.utc):
+                        continue
+                except (ValueError, OverflowError, OSError):
+                    pass
             jobs.append(
                 {
-                    "id": job.get("guid"),
+                    "id": f"himalayas:{job.get('guid')}",
                     "title": job.get("title"),
                     "company": job.get("companyName"),
                     "location": location,
-                    "description": job.get("excerpt", "")[:300],
+                    "description": job.get("description") or job.get("excerpt", ""),
+                    "job_type": job.get("employmentType"),
+                    "industry": ", ".join(job.get("categories") or job.get("category") or []) if isinstance(job.get("categories") or job.get("category"), list) else (job.get("category") or ""),
+                    "source_url": job.get("guid") if str(job.get("guid", "")).startswith("https://himalayas.app/") else (f"https://himalayas.app/companies/{job.get('companySlug')}/jobs" if job.get("companySlug") else "https://himalayas.app"),
                     "url": job.get("applicationLink"),
                     "created": job.get("pubDate"),
                     "salary_min": job.get("minSalary"),
                     "salary_max": job.get("maxSalary"),
+                    "salary_currency": job.get("currency"),
+                    "salary_period": job.get("salaryPeriod"),
+                    "deadline": expiry,
                     "source": "himalayas",
                     "remote": True,
                 }
