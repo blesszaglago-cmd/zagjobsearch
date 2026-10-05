@@ -23,6 +23,8 @@ class HimalayasClient:
         page: int = 1,
         results_per_page: int = 20,
         worldwide_only: bool = False,
+        employment_type: str = "",
+        seniority: str = "",
     ) -> dict:
         """
         Search remote jobs on Himalayas.
@@ -44,6 +46,8 @@ class HimalayasClient:
             "limit": min(results_per_page, 20),
         }
 
+        if employment_type: params["employment_type"] = employment_type
+        if seniority: params["seniority"] = seniority
         if query:
             params["q"] = query
 
@@ -85,7 +89,10 @@ class HimalayasClient:
                     "title": job.get("title"),
                     "company": job.get("companyName"),
                     "location": location,
-                    "description": job.get("excerpt", "")[:300],
+                    "description": job.get("description") or job.get("excerpt", ""),
+                    "job_type": job.get("employmentType"),
+                    "industry": ", ".join(job.get("categories") or job.get("category") or []) if isinstance(job.get("categories") or job.get("category"), list) else (job.get("category") or ""),
+                    "source_url": job.get("guid") if str(job.get("guid", "")).startswith("https://himalayas.app/") else (f"https://himalayas.app/companies/{job.get('companySlug')}/jobs" if job.get("companySlug") else "https://himalayas.app"),
                     "url": job.get("applicationLink"),
                     "created": job.get("pubDate"),
                     "salary_min": job.get("minSalary"),

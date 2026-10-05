@@ -3,8 +3,8 @@ import { siteUrl } from "@/lib/site";
 import "./globals.css";
 export const metadata: Metadata = {
  metadataBase: new URL(siteUrl),
- title: {default: "ZagJobSearch | Find Local & Remote Jobs", template: "%s | ZagJobSearch"},
- description: "Find your next role with ZagJobSearch. Explore local and remote jobs from multiple sources, filter by country, and apply directly at the original listing.",
+ title: {default: "ZagJobSearch | Jobs, Application Tracker & CV Help", template: "%s | ZagJobSearch"},
+ description: "Find jobs in Ghana and worldwide with ZagJobSearch. Explore real listings, track your applications, and tailor your CV using your verified experience.",
  applicationName: "ZagJobSearch",
  openGraph: {type:"website",siteName:"ZagJobSearch",title:"ZagJobSearch | Your next move",description:"Discover local and remote jobs in one place. Search freely. Apply directly.",images:[{url:"/opengraph-image",width:1200,height:630,alt:"ZagJobSearch, your next move"}]},
  twitter: {card:"summary_large_image",title:"ZagJobSearch | Your next move",description:"Discover local and remote jobs in one place.",images:["/opengraph-image"]},

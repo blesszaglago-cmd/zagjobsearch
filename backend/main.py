@@ -63,6 +63,8 @@ async def search_jobs(
     country: str = Query("gb", description="2-letter country code (gb, us, gh, ng, ke, za)"),
     page: int = Query(1, ge=1, le=10),
     remote: bool = Query(False, description="Filter for remote jobs"),
+    job_type: str = Query("all"),
+    experience: str = Query(""),
 ):
     """
     Search jobs across multiple sources.
@@ -72,7 +74,7 @@ async def search_jobs(
     """
     q = q.strip()
     country = country.lower()
-    if not q or len(q) > 200 or len(country) != 2 or not country.isalpha():
+    if len(q) > 200 or len(country) != 2 or not country.isalpha():
         raise HTTPException(status_code=400, detail="Enter keywords and a two-letter country code.")
     supported_countries = {"at", "au", "be", "br", "ca", "ch", "de", "es", "fr", "gb", "in", "it", "mx", "nl", "nz", "pl", "sg", "us", "za"}
 
@@ -86,6 +88,8 @@ async def search_jobs(
             country=country.upper(),
             page=page,
             worldwide_only=False,
+            employment_type={"permanent":"Full Time", "part-time":"Part Time", "internship":"Intern", "contract":"Contractor"}.get(job_type, ""),
+            seniority={"entry":"Entry-level", "mid":"Mid-level", "senior":"Senior", "manager":"Manager"}.get(experience, ""),
         )
         jobs.extend(result["jobs"])
     except Exception as e:
@@ -107,7 +111,9 @@ async def search_jobs(
                         "title": job.get("title"),
                         "company": job.get("company", {}).get("display_name"),
                         "location": job.get("location", {}).get("display_name"),
-                        "description": job.get("description", "")[:300],
+                        "description": job.get("description", ""),
+                        "job_type": job.get("contract_time") or job.get("contract_type"),
+                        "industry": job.get("category", {}).get("label"),
                         "url": job.get("redirect_url"),
                         "created": job.get("created"),
                         "salary_min": job.get("salary_min"),
@@ -138,7 +144,7 @@ def signup(data: SignupRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}") 
+        raise HTTPException(status_code=500, detail="Signup is unavailable. Please try again shortly.")
 @app.post("/login", response_model=LoginResponse)
 def login(data: LoginRequest):
     """
@@ -150,4 +156,12 @@ def login(data: LoginRequest):
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")   
+        raise HTTPException(status_code=500, detail="Login is unavailable. Please try again shortly.")
+from workspace_api import router as workspace_router
+app.include_router(workspace_router)
+
+@app.get("/auth/config")
+def auth_config():
+    return {"supabase_url": os.getenv("SUPABASE_URL", ""), "publishable_key": os.getenv("SUPABASE_PUBLISHABLE_KEY", ""), "google_enabled": os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"}
+from reminders import router as reminder_router
+app.include_router(reminder_router)

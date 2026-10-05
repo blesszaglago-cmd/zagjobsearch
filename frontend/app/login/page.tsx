@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_URL } from "../../lib/api";
+
 import Logo from "@/components/Logo";
 
 export default function LoginPage() {
@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const oauthError=useSyncExternalStore(()=>()=>{},()=>new URLSearchParams(window.location.search).get("error")||"",()=>"");
+  const oauthMessage=oauthError==="google_setup"?"Google sign-in is awaiting configuration. Use email and password for now.":oauthError?"Google sign-in could not be completed. Create your account with this email first, or use email and password.":"";
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -23,7 +25,7 @@ export default function LoginPage() {
     setMessage("");
 
     try {
-      const res = await fetch(`${API_URL}/login`, {
+      const res = await fetch("/api/account/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -40,22 +42,7 @@ export default function LoginPage() {
       setStatus("success");
       setMessage(`Welcome back, ${data.full_name}. Redirecting...`);
 
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          user_id: data.user_id,
-          email: data.email,
-          full_name: data.full_name,
-          country: data.country,
-        })
-      );
-
-      setTimeout(() => {
-        const pending = sessionStorage.getItem("zagjobsearch-pending-application");
-        sessionStorage.removeItem("zagjobsearch-pending-application");
-        if (pending && /^https?:\/\//i.test(pending)) window.location.assign(pending);
-        else router.push("/search");
-      }, 1500);
+      router.push("/tracker");
     } catch {
       setStatus("error");
       setMessage("Something went wrong. Try again.");
@@ -89,6 +76,7 @@ export default function LoginPage() {
         <div className="surface-card p-8">
           <h1 className="text-2xl font-bold mb-6">Log in to your account</h1>
 
+          <Link prefetch={false} href="/api/account/google" className="btn-outline google-login">Continue with Google</Link>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" style={labelStyle}>Email</label>
@@ -105,7 +93,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {message && (
+          {(message || oauthMessage) && (
             <p className="mt-4 text-sm" style={{ color: status === "success" ? "var(--secondary)" : "#ff6b6b" }}>
               {message}
             </p>

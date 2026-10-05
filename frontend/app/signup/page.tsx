@@ -1,9 +1,10 @@
 "use client";
 
+import { countries } from "@/lib/countries";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_URL } from "../../lib/api";
+
 import Logo from "@/components/Logo";
 
 export default function SignupPage() {
@@ -35,7 +36,7 @@ export default function SignupPage() {
     setMessage("");
 
     try {
-      const res = await fetch(`${API_URL}/signup`, {
+      const res = await fetch("/api/account/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -87,6 +88,7 @@ export default function SignupPage() {
         <div className="surface-card p-8">
           <h1 className="text-2xl font-bold mb-6">Create your account</h1>
 
+          <Link prefetch={false} href="/api/account/google" className="btn-outline google-login">Continue with Google</Link>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="full_name" style={labelStyle}>Full name</label>
@@ -117,17 +119,7 @@ export default function SignupPage() {
             <div>
               <label htmlFor="country" style={labelStyle}>Country</label>
               <select id="country" name="country" value={form.country} onChange={handleChange} style={inputStyle}>
-                <option value="GH">Ghana</option>
-                <option value="NG">Nigeria</option>
-                <option value="KE">Kenya</option>
-                <option value="ZA">South Africa</option>
-                <option value="US">United States</option>
-                <option value="GB">United Kingdom</option>
-                <option value="CA">Canada</option>
-                <option value="DE">Germany</option>
-                <option value="FR">France</option>
-                <option value="IN">India</option>
-                <option value="AU">Australia</option>
+                {countries.map(([code,name])=><option key={code} value={code.toUpperCase()}>{name}</option>)}
               </select>
             </div>
 

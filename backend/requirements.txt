@@ -5,3 +5,7 @@ python-dotenv
 pydantic
 pydantic[email]
 supabase
+python-multipart
+pypdf
+python-docx
+reportlab
