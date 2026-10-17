@@ -20,6 +20,7 @@ export default function Footer() {
             </Link>
             <Link href="/search?category=remote">Remote from Ghana</Link>
             <Link href="/search?category=scholarships">Scholarships</Link>
+            <Link href="/sources">Where our listings come from</Link>
           </nav>
         </div>
         <div>

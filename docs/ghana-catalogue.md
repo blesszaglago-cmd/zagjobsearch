@@ -10,6 +10,20 @@ AngloGold Ashanti's Ghana career pages require Ghana metadata and a recognised G
 
 Supported sources do not mean complete national/industry coverage. Empty boards contribute zero results. Internships, graduate programmes and apprenticeships enter Early careers when eligible current postings exist. Empty tabs are never populated with invented opportunities. Jobberman is excluded: its terms require written approval for automated extraction (https://www.jobberman.com.gh/terms).
 
+### Ghana source expansion
+
+`backend/ghana_sources.py` adds five public readers, without paid APIs or credentials:
+
+- Ghana Current Jobs: eight recent public index pages, explicit closing dates, Ghana locations, factual metadata summaries, attribution and original application instructions.
+- HIREghana: two public RSS pages, original publication dates and Ghana towns. Anonymous clients remain explicitly undisclosed.
+- GLMIS: eight recent public index pages and detail pages. An Accra recruitment agency address does not qualify a UAE/Bulgaria or other overseas placement. Relative posting ages are checked without inventing an exact publication timestamp.
+- Newmont: public search-page data followed by the matching employer JobPosting and open posting status. A hidden closed-job UI template is not treated as a real closure.
+- Telecel: the published vacancies embedded in the official Zoho career page. Country, publication state, employer job ID and publication age are checked. Apply links lead to the individual official vacancy.
+
+The public `/catalogue/sources` endpoint and frontend `/sources` page distinguish checked integrations from external destinations. LinkedIn, Jobberman, JobsInGhana and SokoJob are external search links until suitable permission/integrations exist. Ghanajob.com, Jobwebghana and JobHouse were not reliably accessible to the importer; no blocks are bypassed. Job Linq has no connected public vacancy feed. The Petroleum Commission link is a candidate-registration pool, not an imported vacancy feed. MTN notices found through Ghana Current Jobs are attributed to that board, not claimed as a direct MTN integration.
+
+Collection uses at most three concurrent requests per host, twelve globally and a 130-second source limit. A failed source does not stop other sources. Recent-window readers cannot infer closure from absence; omitted records instead disappear after 48 hours without a successful check. Database reads explicitly page beyond PostgREST's response cap, and writes use batches of 200. Duplicate board records yield to direct employer records when company, role and town match; a trailing Ghana country label does not create a duplicate.
+
 ## Automation and freshness
 
 `frontend/vercel.json` calls `/api/catalogue/refresh` daily at 05:00 UTC/Ghana time. An atomic service-only database lease prevents overlapping downloads within ten hours, including public refresh requests. Only fixed supported source URLs are fetched. No paid provider is added.

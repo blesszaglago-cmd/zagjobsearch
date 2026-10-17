@@ -17,6 +17,7 @@ export type Job = {
   company: string;
   location: string;
   description: string;
+  description_kind?: "source_summary";
   url: string;
   source: string;
   source_url?: string;
