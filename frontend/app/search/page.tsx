@@ -1,65 +1,422 @@
 "use client";
-
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import {countries} from "@/lib/countries";
-import {Job,listingTypes} from "@/lib/jobs";
-import Link from "next/link";
-
+import type { Job } from "@/lib/jobs";
+import {
+  categories,
+  regions,
+  types,
+  experienceLevels,
+  studyLevels,
+  displayDate,
+} from "@/lib/ghana";
 function SearchContent() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const q = params.get("q") || "";
-  const selectedCountry = params.get("country") || "gh";
-  const remoteOnly = params.get("remote") === "true";
-  const page = Math.max(1, Math.min(10, Number(params.get("page")) || 1));
-  const [query, setQuery] = useState(q);
-  const [country, setCountry] = useState(selectedCountry);
-  const [jobType,setJobType]=useState(params.get("job_type")||"all"),[experience,setExperience]=useState(params.get("experience")||""),[industry,setIndustry]=useState(params.get("industry")||""),[salary,setSalary]=useState(params.get("salary_min")||""),[currency,setCurrency]=useState(params.get("currency")||"USD"),[period,setPeriod]=useState(params.get("salary_period")||"annual");
-  const activeType=params.get("job_type")||"all";
-  const filterString=params.toString();
-  const [remote, setRemote] = useState(remoteOnly);
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [warning, setWarning] = useState("");
+  const params = useSearchParams(),
+    router = useRouter(),
+    filterString = params.toString();
+  const raw = params.get("category") || "jobs",
+    category = categories.some(([key]) => key === raw) ? raw : "jobs";
+  const [jobs, setJobs] = useState<Job[]>([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [total, setTotal] = useState(0),
+    [more, setMore] = useState(false),
+    [updated, setUpdated] = useState<string | null>(null),
+    [warning, setWarning] = useState(false);
+  const page = Math.max(1, Number(params.get("page")) || 1);
   useEffect(() => {
-    const controller = new AbortController();
-    async function search() {
-      setLoading(true); setError(""); setWarning("");
-      try {
-        const response=await fetch(`/api/jobs?${filterString}`,{signal:controller.signal});
-        const data=await response.json();
-        if(controller.signal.aborted)return;
-        setJobs(data.jobs||[]);
-        if(data.errors?.length)setWarning(`Some sources are unavailable: ${data.errors.join(', ')}. Showing available listings.`);
-      }catch{if(!controller.signal.aborted)setError('Search is temporarily unavailable. Please try again.');}
-      setLoading(false);
-    }
-    void search();
-    return () => controller.abort();
-  }, [filterString]);
-  function submit(e: React.FormEvent) {
+    const c = new AbortController();
+    fetch(
+      `/api/jobs?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(filterString)), category })}`,
+      { signal: c.signal },
+    )
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw Error(d.detail || "Search unavailable.");
+        if (!c.signal.aborted) {
+          setJobs(d.jobs || []);
+          setTotal(d.total || 0);
+          setMore(Boolean(d.has_more));
+          setUpdated(d.updated_at);
+          setWarning(
+            (d.source_status || []).some(
+              (s: { state: string }) => s.state !== "ok",
+            ),
+          );
+          setError("");
+          setLoading(false);
+        }
+      })
+      .catch((e) => {
+        if (!c.signal.aborted) {
+          setError(e.message);
+          setLoading(false);
+        }
+      });
+    return () => c.abort();
+  }, [filterString, category]);
+  function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    router.push(`/search?${new URLSearchParams({ q: query.trim(), country, remote: String(remote),job_type:jobType,experience,industry,salary_min:salary,currency,salary_period:period })}`);
+    const data = new FormData(e.currentTarget),
+      next = new URLSearchParams();
+    data.forEach((v, k) => {
+      if (String(v)) next.set(k, String(v));
+    });
+    setLoading(true);
+    router.push(`/search?${next}`);
   }
-  function detailLink(job:Job){return `/jobs/${encodeURIComponent(job.id)}?${params.toString()}`;}
-  function pageLink(next:number){const nextParams=new URLSearchParams(params.toString());nextParams.set('page',String(next));return `/search?${nextParams}`;}
-  return <><Header /><main id="main-content" className="shell">
-    <section className="search-banner"><span className="eyebrow">A LITTLE CLOSER TO YOUR NEXT CHAPTER</span><h1>Find a role that fits you.</h1><p>Search available jobs. Check the details. Apply on the original website.</p></section>
-    <nav className="listing-tabs" aria-label="Listing types">{listingTypes.map(([value,label])=><button key={value} aria-pressed={activeType===value} onClick={()=>{setJobType(value);const next=new URLSearchParams(params.toString());next.set('job_type',value);next.delete('page');router.push(`/search?${next}`)}}>{label}</button>)}</nav>
-    <form onSubmit={submit} className="search-layout">
-      <aside className="filter-sidebar"><h2>Refine your search</h2><label className="field-label" htmlFor="country">Your country</label><select id="country" value={country} onChange={e => setCountry(e.target.value)}>{countries.map(([code, name]) => <option value={code} key={code}>{name}</option>)}</select><label className="checkbox-label remote-filter"><input type="checkbox" checked={remote} onChange={e => setRemote(e.target.checked)} />Remote jobs only</label><label className="field-label" htmlFor="experience">Experience</label><select id="experience" value={experience} onChange={e=>setExperience(e.target.value)}><option value="">All levels</option><option value="entry">Entry level</option><option value="mid">Mid level</option><option value="senior">Senior</option><option value="manager">Management</option></select><label className="field-label" htmlFor="industry">Industry or field</label><input id="industry" value={industry} onChange={e=>setIndustry(e.target.value)} placeholder="Any industry"/><label className="field-label" htmlFor="salary">Minimum salary</label><input id="salary" type="number" min="0" value={salary} onChange={e=>setSalary(e.target.value)}/><label className="field-label" htmlFor="currency">Currency</label><input id="currency" value={currency} onChange={e=>setCurrency(e.target.value.toUpperCase())} maxLength={3}/><label className="field-label" htmlFor="period">Salary period</label><select id="period" value={period} onChange={e=>setPeriod(e.target.value)}>{['annual','yearly','monthly','weekly','hourly'].map(p=><option key={p}>{p}</option>)}</select><button className="btn-primary" type="submit" disabled={loading}>Update results</button><p className="filter-note">Remote roles may have location restrictions. Always check your eligibility on the posting.</p></aside>
-      <section className="results-panel" aria-busy={loading}><div className="results-search"><label className="sr-only" htmlFor="keywords">Job title or keywords</label><input id="keywords" value={query} onChange={e => setQuery(e.target.value)} placeholder="Job title or keywords" maxLength={200} /><button type="submit" className="btn-primary" disabled={loading}>Search ↗</button></div>
-        <div role="status" aria-live="polite" className="results-count">{loading ? "Searching job sources…" : `${jobs.length} results on page ${page}`}</div>
-        {warning && <p className="source-warning">{warning}</p>}{error && <p role="alert" className="search-error">{error}</p>}
-        {!loading && jobs.map(job => <article key={`${job.source}:${job.id}`} className="job-row"><div className="job-mark" aria-hidden="true">{(job.company || "J").slice(0, 1)}</div><div className="job-main"><h2><Link href={detailLink(job)}>{job.title}</Link></h2><p className="job-company">{job.company || "Company not supplied"} · {job.location || "Location not supplied"}</p><p className="job-description">{job.description.slice(0,300)}</p><div className="job-tags"><span className="tag">{job.source === "jobicy" ? <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a> : job.source}</span>{job.remote && <span className="tag mint">Remote</span>}{job.salary_min != null && <span className="tag">{job.salary_currency || ""} {Number(job.salary_min).toLocaleString()}{job.salary_max != null ? ` – ${Number(job.salary_max).toLocaleString()}` : "+"}{job.salary_period ? ` / ${job.salary_period}` : ""}</span>}</div></div><div className="job-actions"><Link href={detailLink(job)} className="btn-primary">View role ↗</Link><small>Details and application link</small></div></article>)}
-        {!loading && !error && jobs.length === 0 && <div className="empty-state"><span aria-hidden="true">⌕</span><h2>{q ? "Let’s try a different search." : "What would you like to do next?"}</h2><p>{q ? "Try a broader job title or another country. Coverage depends on the available sources." : "Enter a role or skill to discover real jobs."}</p></div>}
-        {!loading && <div className="pagination"><button type="button" className="btn-outline" disabled={page === 1} onClick={() => router.push(pageLink(page-1))}>Previous</button><span>Page {page}</span><button type="button" className="btn-outline" disabled={page >= 10 || jobs.length === 0} onClick={() => router.push(pageLink(page+1))}>Next</button></div>}
-      </section>
-    </form>
-  </main><Footer /></>;
+  function switchCategory(value: string) {
+    setLoading(true);
+    setJobs([]);
+    router.push(`/search?category=${value}`);
+  }
+  function paginate(n: number) {
+    const next = new URLSearchParams(filterString);
+    next.set("page", String(n));
+    setLoading(true);
+    router.push(`/search?${next}`);
+  }
+  const scholarship = category === "scholarships";
+  return (
+    <>
+      <Header />
+      <main id="main-content" className="shell gh-search">
+        <section className="search-banner gh-banner">
+          <p className="eyebrow">OPPORTUNITIES FOR GHANA</p>
+          <h1>
+            {scholarship
+              ? "Invest in your next qualification."
+              : category === "early"
+                ? "Your first experience starts here."
+                : category === "remote"
+                  ? "Remote roles. Ghana eligible."
+                  : "Find your next role in Ghana."}
+          </h1>
+          <p>
+            {scholarship
+              ? "Study in Ghana, or find overseas scholarships explicitly open to Ghanaians."
+              : "Search source-linked vacancies. Check the details. Apply directly at the original source."}
+          </p>
+        </section>
+        <nav className="gh-tabs" aria-label="Opportunity categories">
+          {categories.map(([v, label]) => (
+            <button
+              type="button"
+              key={v}
+              aria-pressed={category === v}
+              onClick={() => switchCategory(v)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <form
+          key={category + "|" + filterString}
+          onSubmit={submit}
+          className="search-layout"
+        >
+          <input type="hidden" name="category" value={category} />
+          <aside className="filter-sidebar">
+            <h2>
+              {scholarship
+                ? "Scholarship filters"
+                : category === "early"
+                  ? "Early career filters"
+                  : "Job filters"}
+            </h2>
+            {scholarship ? (
+              <>
+                <label className="field-label" htmlFor="study">
+                  Study level
+                </label>
+                <select
+                  id="study"
+                  name="study_level"
+                  defaultValue={params.get("study_level") || ""}
+                >
+                  <option value="">All study levels</option>
+                  {studyLevels.map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+                <label className="field-label" htmlFor="destination">
+                  Study destination
+                </label>
+                <select
+                  id="destination"
+                  name="destination"
+                  defaultValue={params.get("destination") || ""}
+                >
+                  <option value="">Ghana and abroad</option>
+                  <option value="ghana">Study in Ghana</option>
+                  <option value="abroad">
+                    Study abroad, Ghanaian eligible
+                  </option>
+                </select>
+                <label className="field-label" htmlFor="funding">
+                  Funding
+                </label>
+                <select
+                  id="funding"
+                  name="funding"
+                  defaultValue={params.get("funding") || ""}
+                >
+                  <option value="">All funding</option>
+                  <option value="full">Fully funded</option>
+                  <option value="partial">Partially funded</option>
+                </select>
+              </>
+            ) : (
+              <>
+                <label className="field-label" htmlFor="type">
+                  {category === "early" ? "Programme type" : "Employment type"}
+                </label>
+                <select
+                  id="type"
+                  name="job_type"
+                  defaultValue={params.get("job_type") || "all"}
+                >
+                  {(types[category] || types.jobs).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+                {category !== "remote" ? (
+                  <>
+                    <label className="field-label" htmlFor="region">
+                      Region
+                    </label>
+                    <select
+                      id="region"
+                      name="region"
+                      defaultValue={params.get("region") || ""}
+                    >
+                      <option value="">Across Ghana</option>
+                      {regions.map((r) => (
+                        <option key={r}>{r}</option>
+                      ))}
+                    </select>
+                    <label className="field-label" htmlFor="town">
+                      Town or city
+                    </label>
+                    <input
+                      id="town"
+                      name="town"
+                      defaultValue={params.get("town") || ""}
+                      placeholder="Accra, Tamale, Ho…"
+                    />
+                  </>
+                ) : null}
+                <label className="field-label" htmlFor="experience">
+                  Experience level
+                </label>
+                <select
+                  id="experience"
+                  name="experience"
+                  defaultValue={params.get("experience") || ""}
+                >
+                  <option value="">All levels</option>
+                  {experienceLevels.map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+            <label className="field-label" htmlFor="industry">
+              {scholarship ? "Subject or field" : "Industry or field"}
+            </label>
+            <input
+              id="industry"
+              name="industry"
+              defaultValue={params.get("industry") || ""}
+              placeholder={
+                scholarship ? "Engineering, education…" : "Finance, healthcare…"
+              }
+            />
+            <button className="btn-primary" type="submit">
+              Apply filters
+            </button>
+            <Link className="text-action" href={`/search?category=${category}`}>
+              Clear filters
+            </Link>
+            <p className="filter-note">
+              Filters use information supplied by the source. Unspecified
+              details are never guessed.
+            </p>
+          </aside>
+          <section className="results-panel" aria-busy={loading}>
+            <div className="results-search">
+              <label className="sr-only" htmlFor="keywords">
+                Keywords
+              </label>
+              <input
+                id="keywords"
+                name="q"
+                defaultValue={params.get("q") || ""}
+                placeholder={
+                  scholarship
+                    ? "Scholarship, provider or subject"
+                    : "Job title, employer or skill"
+                }
+                maxLength={200}
+              />
+              <button className="btn-primary" type="submit">
+                Search ↗
+              </button>
+            </div>
+            <div
+              className="gh-subsections"
+              aria-label={scholarship ? "Study levels" : "Listing subsections"}
+            >
+              {(scholarship ? studyLevels : types[category] || types.jobs).map(
+                ([v, l]) => {
+                  const next = new URLSearchParams({
+                    category,
+                    [scholarship ? "study_level" : "job_type"]: v,
+                  });
+                  return (
+                    <Link key={v} href={`/search?${next}`}>
+                      {l}
+                    </Link>
+                  );
+                },
+              )}
+            </div>
+            <p role="status" className="results-count">
+              {loading
+                ? "Loading the Ghana catalogue…"
+                : `${total} current opportunities · Page ${page}`}
+            </p>
+            {updated ? (
+              <p className="filter-note">
+                Last refresh {displayDate(updated)}. Rechecked automatically
+                each day.
+              </p>
+            ) : null}
+            {warning ? (
+              <p className="source-warning">
+                Some sources could not be checked. Only recently checked
+                listings are shown.
+              </p>
+            ) : null}
+            {error ? (
+              <p role="alert" className="search-error">
+                {error}
+              </p>
+            ) : null}
+            {!loading && !error
+              ? jobs.map((job) => (
+                  <article className="job-row" key={job.id}>
+                    <div className="job-mark" aria-hidden="true">
+                      {job.company.slice(0, 1)}
+                    </div>
+                    <div className="job-main">
+                      <p className="gh-source">{job.company}</p>
+                      <h2>
+                        <Link href={`/jobs/${job.id}`}>{job.title}</Link>
+                      </h2>
+                      <p className="job-company">{job.location}</p>
+                      <p className="job-description">
+                        {job.description.slice(0, 200)}…
+                      </p>
+                      <div className="job-tags">
+                        <span className="tag mint">
+                          {scholarship
+                            ? job.study_levels
+                                ?.map(
+                                  (l) =>
+                                    studyLevels.find(([v]) => v === l)?.[1] ||
+                                    l,
+                                )
+                                .join(", ") || "Study level not specified"
+                            : job.job_type === "unspecified"
+                              ? "Type not specified"
+                              : job.job_type}
+                        </span>
+                        {!scholarship ? (
+                          <span className="tag">
+                            {experienceLevels.find(
+                              ([v]) => v === job.experience,
+                            )?.[1] || "Level not specified"}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="listing-dates">
+                        {job.created
+                          ? `${job.date_kind === "source_updated" ? "Source updated" : "Posted"} ${displayDate(job.created)} · `
+                          : ""}
+                        Deadline: {displayDate(job.deadline)}
+                        <br />
+                        Source checked: {displayDate(job.checked_at)}
+                      </p>
+                    </div>
+                    <div className="job-actions">
+                      <Link href={`/jobs/${job.id}`} className="btn-primary">
+                        View details ↗
+                      </Link>
+                      <small>Apply at the original source</small>
+                    </div>
+                  </article>
+                ))
+              : null}
+            {!loading && !error && jobs.length === 0 ? (
+              <div className="empty-state">
+                <h2>No current matches.</h2>
+                <p>
+                  Try fewer filters. We do not substitute unrelated countries or
+                  expired listings. Coverage is growing as more sources pass our
+                  checks.
+                </p>
+                <Link
+                  href={`/search?category=${category}`}
+                  className="btn-outline"
+                >
+                  Reset this category
+                </Link>
+              </div>
+            ) : null}
+            {!loading && !error ? (
+              <div className="pagination">
+                <button
+                  type="button"
+                  className="btn-outline"
+                  disabled={page === 1}
+                  onClick={() => paginate(page - 1)}
+                >
+                  Previous
+                </button>
+                <span>Page {page}</span>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  disabled={!more}
+                  onClick={() => paginate(page + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
+          </section>
+        </form>
+      </main>
+      <Footer />
+    </>
+  );
 }
-export default function SearchPage() { return <Suspense fallback={<p className="empty-state">Loading search…</p>}><SearchContent /></Suspense>; }
+export default function Page() {
+  return (
+    <Suspense
+      fallback={<p className="empty-state">Loading Ghana opportunities…</p>}
+    >
+      <SearchContent />
+    </Suspense>
+  );
+}

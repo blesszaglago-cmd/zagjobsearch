@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { API_URL } from "@/lib/api";
 const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: 43200 };
-const allowed = /^(me|applications(?:\/[a-zA-Z0-9-]+(?:\/events)?)?|profile|cv\/(extract|prepare|cover-letter|export)|login|signup|logout|google(?:\/callback)?|config)$/;
+const allowed = /^(me|applications(?:\/[a-zA-Z0-9-]+(?:\/events)?)?|profile|login|signup|logout|google(?:\/callback)?|config)$/;
 async function handle(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const name = path.join("/");
@@ -45,7 +45,6 @@ async function handle(request: NextRequest, context: { params: Promise<{ path: s
       if (request.method !== "GET") { const size = Number(request.headers.get("content-length") || 0); if (size > 6 * 1024 * 1024) return NextResponse.json({ detail: "File too large" }, { status: 413 }); const bytes = await request.arrayBuffer(); if(bytes.byteLength > 6 * 1024 * 1024) return NextResponse.json({detail:"File too large"},{status:413}); body = bytes; headers["Content-Type"] = request.headers.get("content-type") || "application/json"; }
     }
     const upstream = await fetch(endpoint, { method, headers, body, cache: "no-store", signal: AbortSignal.timeout(25000) });
-    if (name === "cv/export" && upstream.ok) return new Response(await upstream.arrayBuffer(), { headers: { "Content-Type": upstream.headers.get("content-type") || "application/octet-stream", "Content-Disposition": upstream.headers.get("content-disposition") || "attachment", "Cache-Control": "no-store" } });
     if(name === "google/callback" && !upstream.ok) return NextResponse.redirect(new URL("/login?error=google_failed",request.url));
     const data = await upstream.json();
     const token = data.access_token; delete data.access_token;
