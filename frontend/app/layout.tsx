@@ -4,11 +4,11 @@ import "./globals.css";
 import AnalyticsConsent from "@/components/AnalyticsConsent";
 export const metadata: Metadata = {
  metadataBase: new URL(siteUrl),
- title: {default: "ZagJobSearch | Jobs, Application Tracker & CV Help", template: "%s | ZagJobSearch"},
- description: "Find jobs in Ghana and worldwide with ZagJobSearch. Explore real listings, track your applications, and tailor your CV using your verified experience.",
+ title: {default: "ZagJobSearch | Jobs in Ghana & Application Tracker", template: "%s | ZagJobSearch"},
+ description: "Find jobs across Ghana, internships, scholarships and remote roles accepting Ghana-based applicants. Track your applications with ZagJobSearch.",
  applicationName: "ZagJobSearch",
- openGraph: {type:"website",siteName:"ZagJobSearch",title:"ZagJobSearch | Your next move",description:"Discover local and remote jobs in one place. Search freely. Apply directly.",images:[{url:"/opengraph-image",width:1200,height:630,alt:"ZagJobSearch, your next move"}]},
- twitter: {card:"summary_large_image",title:"ZagJobSearch | Your next move",description:"Discover local and remote jobs in one place.",images:["/opengraph-image"]},
+ openGraph: {type:"website",siteName:"ZagJobSearch",title:"ZagJobSearch | Your next move",description:"Discover jobs in Ghana, internships, scholarships and Ghana-eligible remote roles. Search freely. Apply directly.",images:[{url:"/opengraph-image",width:1200,height:630,alt:"ZagJobSearch, your next move"}]},
+ twitter: {card:"summary_large_image",title:"ZagJobSearch | Your next move",description:"Find jobs, internships and scholarships for Ghana.",images:["/opengraph-image"]},
  robots: {index:true,follow:true},
  verification: {
   google:process.env.GOOGLE_SITE_VERIFICATION || "ccdjXJLmlwLDVpjItOdDxzoHX-4mf1GiKsKJTl4U3xI",

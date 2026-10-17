@@ -4,13 +4,231 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SearchForm from "@/components/SearchForm";
 import { siteUrl } from "@/lib/site";
-export const metadata:Metadata={alternates:{canonical:"/"}};
-const categories=[{name:"Find your next role",query:"/search",letter:"01",tone:"lavender",description:"Browse real opportunities, with Ghana at the heart",labels:["Jobs","Internships","Scholarships"],cta:"Explore listings"},{name:"Keep your search on track",query:"/tracker",letter:"02",tone:"mint",description:"Applications, notes and deadlines in one workspace",labels:["Status","Notes","Follow-ups"],cta:"Open your tracker"},{name:"Make your CV count",query:"/cv",letter:"03",tone:"peach",description:"Refine your CV and tailor it to the role",labels:["Upload","Tailor","Download"],cta:"Visit the CV studio"}];
-export default function Home(){const schema={"@context":"https://schema.org","@type":"WebSite",name:"ZagJobSearch",alternateName:"zagjobsearch",url:siteUrl};return <><Header/><main id="main-content"><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(schema).replace(/</g,"\u003c")}}/>
-<div className="shell"><section className="hero photo-section photo-team"><div className="hero-copy"><p className="eyebrow"><span/> YOUR JOB SEARCH, SIMPLIFIED</p><h1>Find work.<br/>Find your direction.<br/><span>All in one place.</span></h1><p className="hero-description">Find real opportunities. Keep your applications organised. Prepare a CV that reflects what you bring. From Ghana to your next chapter.</p><div className="hero-links"><Link href="/search" className="btn-primary">Explore jobs ↗</Link><span>Free to search. Built for you.</span></div></div><div className="hero-visual" aria-hidden="true"><div className="visual-backdrop"><span className="backdrop-label">A NEW CHAPTER</span><div className="preview-window"><div className="window-bar"><i/><i/><i/><span>zagjobsearch</span></div><div className="window-content"><div className="tiny-search">⌕ <span>Your next opportunity</span></div><div className="tiny-tabs"><b>Discover</b><span>Remote</span><span>Local</span></div>{[["S","Software engineer","Technology","lavender"],["D","Data analyst","Business & finance","mint"],["C","Customer support","People & service","peach"]].map(([l,t,d,c])=><div className="tiny-job" key={t}><span className={`tiny-avatar ${c}`}>{l}</span><div><strong>{t}</strong><small>{d}</small></div><span className="tiny-arrow">↗</span></div>)}</div></div><div className="mini-window"><span className="mini-icon">↗</span><strong>One search.<br/>More possibilities.</strong><span className="mini-line"/><span className="mini-line short"/></div><p className="visual-caption">Your next move starts here.</p></div><div className="visual-footnote"><span className="small-mark">ZB</span><span>Designed around your job hunt.</span><span className="sample-label">Illustration</span></div></div></section>
-<section className="search-section photo-section photo-desk" aria-label="Search jobs"><SearchForm/><div className="search-bottom"><div className="popular"><span>Popular searches</span>{["Software engineer","Marketing","Customer support"].map(x=><Link key={x} href={`/search?q=${encodeURIComponent(x)}&country=gh`}>{x} ↗</Link>)}</div><Link className="remote-shortcut" href="/search?q=remote&remote=true&country=gh">Remote opportunities ↗</Link></div></section>
-<section id="explore" className="explore-section photo-section photo-workplace"><div className="section-heading"><div><p className="eyebrow muted">YOUR ENTIRE JOB HUNT</p><h2>Three tools. One place to move forward.</h2></div><Link className="btn-small" href="/search">Browse all jobs ↗</Link></div><div className="category-grid">{categories.map(c=><Link key={c.name} href={c.query} className="category-card"><div className="category-title"><span className={`category-mark ${c.tone}`}>{c.letter}</span><div><h3>{c.name}</h3><p>{c.description}</p></div><span aria-hidden="true">↗</span></div><div className={`category-illustration ${c.tone}`} aria-hidden="true"><div className="illustration-paper"><span className="paper-heading">{c.name}</span><div className="paper-line"/><div className="paper-line short"/><div className="paper-items"><i/><i/><i/></div><div className="paper-tags">{c.labels.map(l=><span key={l}>{l}</span>)}</div></div><span className="illustration-orbit"/></div><div className="category-footer"><span>{c.cta}</span><span>→</span></div></Link>)}</div></section>
-<section className="mint-feature photo-section photo-team"><div><p className="eyebrow">A SEARCH THAT GOES FURTHER</p><h2>Opportunities<br/>beyond your postcode.</h2><p>Explore remote roles and check where you’re eligible to work. The right opportunity could be closer than you think.</p><Link className="btn-primary" href="/search?q=remote&remote=true&country=gh">Find remote work ↗</Link></div><div className="remote-art" aria-hidden="true"><div className="remote-circle"/><div className="remote-card"><div className="remote-card-top"><span>⌁</span><small>WORK FROM WHERE YOU ARE</small></div><h3>Great work.<br/><em>New possibilities.</em></h3><div className="remote-card-bottom"><span>Explore remote opportunities</span><span>↗</span></div></div><span className="remote-star">✳</span></div></section>
-<section id="how-it-works" className="how-section photo-section photo-desk"><div className="section-heading"><div><p className="eyebrow muted">KEEP IT SIMPLE</p><h2>Your next role, a few steps away.</h2></div></div><div className="steps-grid">{[["01","Search for your next role","Enter a title or skill, choose a country, and explore available jobs."],["02","Find the details that matter","Check the employer, location, source and salary information where provided."],["03","Apply at the original source","Open the original posting to read the full requirements and submit your application."]].map(([n,t,d])=><div className="step" key={n}><span className="step-number">{n}</span><h3>{t}</h3><p>{d}</p></div>)}</div></section>
-<section className="bottom-cta photo-section photo-workplace"><p className="eyebrow muted">MADE FOR THE JOB SEEKER</p><h2>Let’s find your next opportunity.</h2><p>Search freely. Create an account to track your progress and work on your CV.</p><Link href="/signup" className="btn-primary">Create your free account ↗</Link><Link href="/search" className="cta-link">Browse jobs first →</Link></section>
-</div></main><Footer/></>}
+export const metadata: Metadata = {
+  title: {
+    absolute: "ZagJobSearch | Jobs in Ghana, Internships & Scholarships",
+  },
+  description:
+    "Find jobs across Ghana, internships, remote roles accepting Ghana-based applicants and scholarships for Ghanaians. Track your applications in one place.",
+  alternates: { canonical: "/" },
+};
+const paths = [
+  [
+    "01",
+    "Jobs in Ghana",
+    "From Accra to opportunities across the country.",
+    "/search?category=jobs",
+    "lavender",
+  ],
+  [
+    "02",
+    "Internships & early careers",
+    "Internships, graduate programmes and apprenticeships.",
+    "/search?category=early",
+    "mint",
+  ],
+  [
+    "03",
+    "Remote from Ghana",
+    "Roles with explicit eligibility for Ghana-based applicants.",
+    "/search?category=remote",
+    "peach",
+  ],
+  [
+    "04",
+    "Scholarships",
+    "Study in Ghana or abroad, with Ghanaian eligibility.",
+    "/search?category=scholarships",
+    "lavender",
+  ],
+];
+export default function Home() {
+  return (
+    <>
+      <Header />
+      <main id="main-content" className="gh-home">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "ZagJobSearch",
+              url: siteUrl,
+            }).replace(/</g, "\\u003c"),
+          }}
+        />
+        <div className="shell">
+          <section className="gh-hero photo-section photo-team">
+            <div className="gh-hero-copy">
+              <p className="eyebrow">
+                <span className="ghana-flag" aria-label="Ghana flag">
+                  ★
+                </span>{" "}
+                MADE FOR YOUR NEXT MOVE IN GHANA
+              </p>
+              <h1>
+                Your talent.
+                <br />
+                Your next role.
+                <br />
+                <span>Right here in Ghana.</span>
+              </h1>
+              <p>
+                Find jobs, internships and scholarships with clear sources and
+                application links. Keep your applications organised as you move
+                forward.
+              </p>
+              <Link href="/search" className="btn-primary">
+                Explore Ghana jobs ↗
+              </Link>
+            </div>
+            <div className="gh-hero-art" aria-hidden="true">
+              <div className="kente-ribbon" />
+              <div className="gh-art-card">
+                <span className="gh-art-label">YOUR SEARCH, YOUR WAY</span>
+                <h2>
+                  Where will
+                  <br />
+                  you go next?
+                </h2>
+                <div className="gh-city-list">
+                  <span>Accra</span>
+                  <span>Kumasi</span>
+                  <span>Takoradi</span>
+                  <span>Tamale</span>
+                  <span>Ho</span>
+                  <span>Across Ghana</span>
+                </div>
+                <p>Jobs · Internships · Scholarships</p>
+              </div>
+              <div className="ghana-star">★</div>
+            </div>
+          </section>
+          <section
+            className="search-section photo-section photo-desk"
+            aria-label="Search Ghana jobs"
+          >
+            <SearchForm />
+            <div className="search-bottom">
+              <div className="popular">
+                <span>Start here</span>
+                <Link href="/search?category=jobs&region=Greater+Accra">
+                  Accra & Greater Accra ↗
+                </Link>
+                <Link href="/search?category=early&job_type=internship">
+                  Internships ↗
+                </Link>
+                <Link href="/search?category=jobs">Across Ghana ↗</Link>
+              </div>
+            </div>
+          </section>
+          <section className="gh-pathways photo-section photo-workplace">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow muted">CHOOSE YOUR PATH</p>
+                <h2>
+                  Different opportunities.
+                  <br />A search that fits each one.
+                </h2>
+              </div>
+            </div>
+            <div className="gh-path-grid">
+              {paths.map(([n, title, desc, url, tone]) => (
+                <Link className={`gh-path ${tone}`} href={url} key={n}>
+                  <span className="gh-path-number">{n}</span>
+                  <h3>{title}</h3>
+                  <p>{desc}</p>
+                  <span className="gh-path-cta">Explore →</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+          <section className="gh-tracker photo-section photo-desk">
+            <div>
+              <p className="eyebrow">KEEP YOUR NEXT STEP IN SIGHT</p>
+              <h2>
+                Every application.
+                <br />
+                One private workspace.
+              </h2>
+              <p>
+                Remember where you applied, update your progress and keep notes
+                for your follow-up. Search and apply freely. Create an account
+                when you want to track your applications.
+              </p>
+              <Link href="/tracker" className="btn-primary">
+                Open application tracker ↗
+              </Link>
+            </div>
+            <div className="gh-tracker-preview" aria-hidden="true">
+              <span>YOUR APPLICATION JOURNEY</span>
+              <div>
+                <i />
+                Started
+              </div>
+              <div>
+                <i />
+                Applied
+              </div>
+              <div>
+                <i />
+                Interview
+              </div>
+              <p>Illustration of tracker statuses</p>
+            </div>
+          </section>
+          <section className="gh-quality">
+            <p className="eyebrow muted">CLEAR SOURCES. USEFUL DETAILS.</p>
+            <h2>Know what you’re applying for.</h2>
+            <div className="steps-grid">
+              {[
+                [
+                  "01",
+                  "Check the listing",
+                  "See the employer, location, source and deadline when provided.",
+                ],
+                [
+                  "02",
+                  "Apply at the source",
+                  "Read the requirements and complete your application on the original website.",
+                ],
+                [
+                  "03",
+                  "Keep your record",
+                  "Save the opportunity and confirm Applied after you submit.",
+                ],
+              ].map(([n, t, d]) => (
+                <div className="step" key={n}>
+                  <span className="step-number">{n}</span>
+                  <h3>{t}</h3>
+                  <p>{d}</p>
+                </div>
+              ))}
+            </div>
+            <p className="coverage-note">
+              We collect from supported employer and official sources, check
+              them daily and hide stale listings. Coverage varies by region and
+              industry. A source check does not guarantee an employer’s decision
+              or availability between checks.
+            </p>
+          </section>
+          <section className="bottom-cta gh-banner">
+            <p className="eyebrow">YOUR NEXT OPPORTUNITY STARTS HERE</p>
+            <h2>Built for job seekers in Ghana.</h2>
+            <Link
+              href="/search?category=jobs&region=Greater+Accra"
+              className="btn-primary"
+            >
+              Explore Accra jobs ↗
+            </Link>
+            <Link href="/search" className="cta-link">
+              Search across Ghana →
+            </Link>
+          </section>
+        </div>
+      </main>
+      <Footer />
+    </>
+  );
+}
