@@ -98,30 +98,26 @@ class CatalogueTests(unittest.IsolatedAsyncioTestCase):
             c.httpx, "AsyncClient", return_value=context
         ):
             with self.assertRaises(HTTPException) as error:
-                await c.catalogue_details(job["id"])
+                await c.catalogue_details(job["id"], verify=True)
         self.assertEqual(error.exception.status_code, 410)
         db.table.return_value.update.assert_called_with({"status": "closed"})
 
-    def test_expired_rows_are_not_searchable(self):
-        expired = self.job()
-        expired["category"] = "jobs"
+    def test_search_validates_input_and_preserves_database_pagination(self):
+        with self.assertRaises(HTTPException):
+            c.query_catalogue({"category": "unrelated"})
+        with self.assertRaises(HTTPException):
+            c.query_catalogue({"salary_min": "NaN"})
         db = MagicMock()
-        db.table.return_value.select.return_value.eq.return_value.execute.return_value.data = (
-            []
-        )
-        rows = [
-            {
-                "payload": expired,
-                "first_seen_at": c.NOW().isoformat(),
-                "deadline": (c.NOW() - timedelta(days=1)).isoformat(),
-            }
-        ]
-        request = Request({"type": "http", "query_string": b"category=jobs"})
-        with patch.object(c, "active_rows", return_value=rows), patch.object(
-            c, "supabase", db
-        ):
-            r = c.search_catalogue(request)
-        self.assertEqual(r["jobs"], [])
+        db.rpc.return_value.execute.return_value.data = {
+            "jobs": [],
+            "total": 1200,
+            "page": 51,
+            "has_more": True,
+        }
+        with patch.object(c, "supabase", db):
+            result = c.query_catalogue({"page": "51"})
+        self.assertEqual(result["page"], 51)
+        self.assertEqual(db.rpc.call_args.args[1]["filters"]["page"], "51")
 
     async def test_failed_source_preserved_but_disappeared_listing_closed(self):
         job = self.job()
@@ -135,7 +131,9 @@ class CatalogueTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(c, "supabase", db), patch.object(
             c,
             "collect",
-            AsyncMock(return_value=[("test", [job]), ("unavailable", None), ("glmis", [])]),
+            AsyncMock(
+                return_value=[("test", [job]), ("unavailable", None), ("glmis", [])]
+            ),
         ):
             result = await c.refresh()
         self.assertTrue(result["refreshed"])
@@ -226,39 +224,21 @@ class ScholsecTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(jobs), 2)
         self.assertEqual(fetch.await_count, 4)
 
-    def test_open_default_excludes_closed_and_unknown_notices(self):
-        closed = c.parse_scholarship(
-            self.notice(deadline="September 21, 2026"),
-            "https://scholarships.gov.gh/opportunities/closed",
-        )
-        unknown = c.parse_scholarship(
-            self.notice(), "https://scholarships.gov.gh/opportunities/unknown"
-        )
-        rows = [
-            {
-                "payload": j,
-                "first_seen_at": c.NOW().isoformat(),
-                "deadline": j["deadline"],
-            }
-            for j in [closed, unknown]
-        ]
+    def test_open_default_filter_is_sent_to_database(self):
         db = MagicMock()
-        db.table.return_value.select.return_value.eq.return_value.execute.return_value.data = (
-            []
-        )
-        with patch.object(c, "active_rows", return_value=rows), patch.object(
-            c, "supabase", db
+        db.rpc.return_value.execute.return_value.data = {
+            "jobs": [],
+            "total": 0,
+            "page": 1,
+            "has_more": False,
+        }
+        with patch.object(c, "supabase", db), patch.object(
+            c, "refresh_state", return_value={}
         ):
-            default = c.search_catalogue(
+            result = c.search_catalogue(
                 Request({"type": "http", "query_string": b"category=scholarships"})
             )
-            all_notices = c.search_catalogue(
-                Request(
-                    {
-                        "type": "http",
-                        "query_string": b"category=scholarships&availability=all",
-                    }
-                )
-            )
-        self.assertEqual(default["total"], 0)
-        self.assertEqual(all_notices["total"], 2)
+        self.assertEqual(result["jobs"], [])
+        sent = db.rpc.call_args.args[1]["filters"]
+        self.assertEqual(sent["category"], "scholarships")
+        self.assertNotEqual(sent.get("availability"), "all")

@@ -17,6 +17,10 @@ export type Job = {
   company: string;
   location: string;
   description: string;
+  experience_years_min?: number;
+  experience_years_max?: number | null;
+  search_terms?: string[];
+  source_urls?: string[];
   description_kind?: "source_summary";
   url: string;
   source: string;

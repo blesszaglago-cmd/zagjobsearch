@@ -6,14 +6,33 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Header
 from database.supabase_client import supabase
 import ghana_sources
+from listing_quality import enrich, deduplicate, identity
 
 router = APIRouter()
 NOW = lambda: datetime.now(timezone.utc)
 REGIONS = {
-    "Greater Accra": ["accra", "tema", "ashaiman", "madina", "adenta", "dodowa", "haatso", "achimota", "spintex", "tesano", "legon", "awketeyman", "akweteyman", "dzorwulu", "dansoman", "tantra hills", "kisseman"],
+    "Greater Accra": [
+        "accra",
+        "tema",
+        "ashaiman",
+        "madina",
+        "adenta",
+        "dodowa",
+        "haatso",
+        "achimota",
+        "spintex",
+        "tesano",
+        "legon",
+        "awketeyman",
+        "akweteyman",
+        "dzorwulu",
+        "dansoman",
+        "tantra hills",
+        "kisseman",
+    ],
     "Ashanti": ["kumasi", "obuasi", "ejisu", "konongo"],
     "Western": ["takoradi", "sekondi", "tarkwa", "prestea"],
     "Central": ["cape coast", "winneba", "mankessim", "kasoa"],
@@ -125,7 +144,7 @@ def classify(title, employment=""):
         ("apprenticeship", r"apprentice"),
         ("graduate", r"graduate (?:programme|program|trainee)|national service"),
     ]:
-        if re.search(pattern, t):
+        if re.search(pattern, t + " " + e):
             return key
     if re.search(r"part[ -]?time", e + " " + t):
         return "part-time"
@@ -144,7 +163,7 @@ def level(title, provided=""):
         ("no-experience", r"no experience"),
         ("senior", r"\bsenior\b|\bsnr\b|\bprincipal\b|\blead\b"),
         ("management", r"\bmanager\b|\bdirector\b|\bhead\b|\bchief\b"),
-        ("junior", r"\bjunior\b|entry[ -]level"),
+        ("junior", r"\bjunior\b|\bjnr\b|entry[ -]level"),
         ("mid", r"mid[ -]level|intermediate"),
     ]:
         if re.search(pattern, t):
@@ -183,6 +202,8 @@ def make_job(
     experience="",
     industry="",
     check_url=None,
+    active_confirmed=False,
+    structured_salary=None,
 ):
     d = date(deadline) or closing(body)
     p = date(posted)
@@ -195,7 +216,7 @@ def make_job(
     ):
         return None
     # An active feed is evidence of publication, not evidence that old recruitment is current.
-    if not d and p and p < NOW() - timedelta(days=60):
+    if not active_confirmed and not d and p and p < NOW() - timedelta(days=60):
         return None
     if not title or len(body) < 80 or not url.startswith("https://"):
         return None
@@ -205,38 +226,44 @@ def make_job(
     ):
         return None
     kind = classify(title, employment)
-    return {
-        "id": hashlib.sha256((source + ":" + str(key)).encode()).hexdigest()[:32],
-        "source_key": source,
-        "title": text(title),
-        "company": text(company),
-        "location": location,
-        "regions": regions_for(location),
-        "description": text(body)[:24000],
-        "url": url,
-        "source_url": url,
-        "source": company,
-        "created": p.isoformat() if p else None,
-        "date_kind": "published" if p else "not_provided",
-        "deadline": d.isoformat() if d else None,
-        "job_type": kind,
-        "employment_label": employment,
-        "experience": level(title, experience),
-        "industry": industry,
-        "remote": remote,
-        "category": (
-            "remote"
-            if remote
-            else (
-                "early"
-                if kind in ["internship", "graduate", "apprenticeship"]
-                else "jobs"
-            )
-        ),
-        "checked_at": NOW().isoformat(),
-        "check_url": check_url,
-        "verification": "Listed on source at last check",
-    }
+    return enrich(
+        {
+            "id": hashlib.sha256((source + ":" + str(key)).encode()).hexdigest()[:32],
+            "source_key": source,
+            "title": text(title),
+            "company": text(company),
+            "location": location,
+            "regions": regions_for(location),
+            "description": BeautifulSoup(
+                html.unescape(str(body)), "html.parser"
+            ).get_text("\n", strip=True)[:24000],
+            "url": url,
+            "source_url": url,
+            "source": company,
+            "created": p.isoformat() if p else None,
+            "date_kind": "published" if p else "not_provided",
+            "deadline": d.isoformat() if d else None,
+            "job_type": kind,
+            "employment_label": employment,
+            "experience": level(title, experience),
+            "industry": industry,
+            "remote": remote,
+            "category": (
+                "remote"
+                if remote
+                else (
+                    "early"
+                    if kind in ["internship", "graduate", "apprenticeship"]
+                    else "jobs"
+                )
+            ),
+            "checked_at": NOW().isoformat(),
+            "check_url": check_url,
+            "verification": "Listed on source at last check",
+        },
+        title + " \n" + body,
+        structured_salary,
+    )
 
 
 async def json_get(client, url):
@@ -263,10 +290,6 @@ async def smart(client, board):
         loc = j.get("location", {})
         if loc.get("country", "").lower() != "gh":
             return None
-        if date(j.get("releasedDate")) and date(j["releasedDate"]) < NOW() - timedelta(
-            days=60
-        ):
-            return None
         u = f'https://api.smartrecruiters.com/v1/companies/{board}/postings/{j["id"]}'
         d = await json_get(client, u)
         body = "\n\n".join(
@@ -287,6 +310,7 @@ async def smart(client, board):
             experience=d.get("experienceLevel", {}).get("label", ""),
             industry=d.get("industry", {}).get("label", ""),
             check_url=u,
+            active_confirmed=True,
         )
 
     result = await asyncio.gather(*(one(j) for j in rows), return_exceptions=True)
@@ -332,6 +356,7 @@ async def greenhouse(client, board):
             ),
             remote=remote,
             check_url=f'https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{j["id"]}',
+            active_confirmed=True,
         )
         if job:
             job["date_kind"] = "source_updated"
@@ -637,10 +662,18 @@ class PublicSourceClient:
         host = urlparse(url).hostname
         limit = self.hosts.setdefault(host, asyncio.Semaphore(3))
         async with limit, self.slots:
-            return await self.client.get(url, **kwargs)
+            for attempt in range(2):
+                try:
+                    response = await self.client.get(url, **kwargs)
+                    if response.status_code not in (502, 503, 504) or attempt:
+                        return response
+                except (httpx.ConnectError, httpx.TimeoutException):
+                    if attempt:
+                        raise
+                await asyncio.sleep(0.5)
 
 
-async def collect():
+async def collect(archive_page=9, tracked=None):
     async with httpx.AsyncClient(
         timeout=12,
         follow_redirects=True,
@@ -653,7 +686,7 @@ async def collect():
             *(greenhouse(client, b) for b in GREENHOUSE),
             scholarships(client),
             mining(client),
-            *ghana_sources.tasks(client),
+            *ghana_sources.tasks(client, archive_page),
         ]
         names = [
             *["smart:" + b for b in SMART],
@@ -662,7 +695,9 @@ async def collect():
             "anglogold",
             *ghana_sources.SOURCE_NAMES,
         ]
-        result = await asyncio.gather(*(asyncio.wait_for(task, 130) for task in tasks), return_exceptions=True)
+        result = await asyncio.gather(
+            *(asyncio.wait_for(task, 130) for task in tasks), return_exceptions=True
+        )
         for name, outcome in zip(names, result):
             if isinstance(outcome, Exception):
                 logging.warning(
@@ -670,10 +705,22 @@ async def collect():
                     name,
                     type(outcome).__name__,
                 )
-        return [
+        collected = [
             (names[i], None if isinstance(r, Exception) else r[1])
             for i, r in enumerate(result)
         ]
+        if tracked:
+            present = {j["id"] for _, jobs in collected for j in (jobs or [])}
+            try:
+                extra = await asyncio.wait_for(
+                    ghana_sources.recheck_tracked(client, tracked, present), 25
+                )
+                for name, jobs in collected:
+                    if jobs is not None:
+                        jobs.extend(j for j in extra if j["source_key"] == name)
+            except (TimeoutError, httpx.HTTPError):
+                logging.warning("Tracked vacancy recheck deferred")
+        return collected
 
 
 def catalogue_rows(columns, fresh=False):
@@ -682,7 +729,9 @@ def catalogue_rows(columns, fresh=False):
     while True:
         query = supabase.table("job_catalogue").select(columns).eq("status", "active")
         if fresh:
-            query = query.gte("last_checked_at", (NOW() - timedelta(hours=48)).isoformat())
+            query = query.gte(
+                "last_checked_at", (NOW() - timedelta(hours=48)).isoformat()
+            )
         rows = query.order("id").range(offset, offset + 499).execute().data
         result.extend(rows)
         if len(rows) < 500:
@@ -696,7 +745,19 @@ async def refresh():
     if not claimed:
         return {"refreshed": False, "reason": "Not due"}
     checked = NOW().isoformat()
-    results = await collect()
+    try:
+        state = refresh_state()
+        archive_page = int(state.get("archive_page") or 9)
+        tracked = catalogue_rows("payload")
+        results = await collect(archive_page, tracked)
+    except Exception:
+        supabase.table("catalogue_refresh").update(
+            {
+                "next_refresh_at": (NOW() + timedelta(minutes=30)).isoformat(),
+                "last_error": "Catalogue collection failed; automatic retry is due in 30 minutes",
+            }
+        ).eq("id", 1).execute()
+        raise
     summary = []
     records = []
     successful = set()
@@ -720,28 +781,59 @@ async def refresh():
             )
         summary.append({"source": source, "state": "ok", "accepted": len(jobs)})
     if records:
+        merged = {j["id"]: j for j in deduplicate([r["payload"] for r in records])}
+        for record in records:
+            record["payload"] = merged[record["id"]]
+            record["deadline"] = record["payload"].get("deadline")
         for offset in range(0, len(records), 200):
-            supabase.table("job_catalogue").upsert(records[offset:offset + 200], on_conflict="id").execute()
+            supabase.table("job_catalogue").upsert(
+                records[offset : offset + 200], on_conflict="id"
+            ).execute()
     old = catalogue_rows("id,source_key")
     closed = [
-        r["id"] for r in old
-        if r["source_key"] in successful - ghana_sources.WINDOWED_SOURCES and r["id"] not in ids
+        r["id"]
+        for r in old
+        if r["source_key"] in successful - ghana_sources.WINDOWED_SOURCES
+        and r["id"] not in ids
     ]
     for offset in range(0, len(closed), 200):
         supabase.table("job_catalogue").update({"status": "closed"}).in_(
-            "id", closed[offset:offset + 200]
+            "id", closed[offset : offset + 200]
         ).execute()
     supabase.table("catalogue_refresh").update(
-        {"completed_at": NOW().isoformat(), "summary": summary}
+        {
+            "completed_at": NOW().isoformat(),
+            "summary": summary,
+            "next_refresh_at": (
+                NOW() + timedelta(hours=6)
+                if all(x["state"] == "ok" for x in summary)
+                else NOW() + timedelta(minutes=30)
+            ).isoformat(),
+            "last_error": (
+                None
+                if all(x["state"] == "ok" for x in summary)
+                else "Some sources need another check"
+            ),
+            "archive_page": 9 if archive_page >= 29 else archive_page + 4,
+        }
     ).eq("id", 1).execute()
     return {"refreshed": True, "sources": summary}
 
 
 @router.get("/catalogue/refresh")
-async def refresh_route():
+async def refresh_route(authorization: str = Header(default="")):
+    from security import require_cron
+
+    require_cron(authorization)
     try:
         return await refresh()
     except Exception:
+        supabase.table("catalogue_refresh").update(
+            {
+                "next_refresh_at": (NOW() + timedelta(minutes=30)).isoformat(),
+                "last_error": "Catalogue refresh failed; another attempt is due in 30 minutes",
+            }
+        ).eq("id", 1).execute()
         raise HTTPException(
             503,
             "The catalogue refresh could not finish. Existing recently checked listings remain available.",
@@ -753,130 +845,203 @@ def active_rows():
 
 
 def job_identity(job):
-    company = re.sub(r"\W", "", job["company"]).lower()
-    title = re.sub(r"\W", "", job["title"]).lower()
-    location = re.sub(r"\bghana\b", "", job["location"], flags=re.I)
-    return company, title, re.sub(r"\W", "", location).lower()
+    return identity(job)
 
 
 @router.get("/catalogue/sources")
 def catalogue_sources():
-    rows = supabase.table("catalogue_refresh").select("completed_at,summary").eq("id", 1).execute().data
-    state = rows[0] if rows else {}
-    health = {x["source"]: x for x in state.get("summary", [])}
-    registry = dict(ghana_sources.SOURCE_INFO)
-    for board in SMART:
-        registry["smart:" + board] = (board.replace("Deloitte6", "Deloitte").replace("AccorHotel", "Accor").replace("AECOM2", "AECOM").replace("StandardBankGroup", "Standard Bank").replace("MastercardFoundation", "Mastercard Foundation"), f"https://careers.smartrecruiters.com/{board}", "Direct employer", "Public employer board. Only explicit Ghana locations qualify.")
-    for board, name in GREENHOUSE.items():
-        registry["greenhouse:" + board] = (name, f"https://job-boards.greenhouse.io/{board}", "Direct employer", "Public employer board. Remote roles must explicitly accept applicants in Ghana.")
-    registry["anglogold"] = ("AngloGold Ashanti", "https://careers.anglogoldashanti.com/", "Direct employer", "Public employer board, checked for Ghana location and closing dates.")
-    registry["scholarships-authority"] = ("Ghana Scholarships Authority", "https://scholarships.gov.gh/opportunities", "Scholarships", "Official notices. Open, unconfirmed and archived notices have separate views.")
-    checked = date(state.get("completed_at"))
-    current = bool(checked and checked >= NOW() - timedelta(hours=48))
-    imported = []
-    for key, (name, url, kind, note) in registry.items():
-        status = health.get(key, {})
-        imported.append({"key": key, "name": name, "url": url, "kind": kind, "note": note, "state": status.get("state", "not_checked") if current else "awaiting_refresh", "accepted": status.get("accepted", 0) if current else 0})
-    external = [{"name": name, "url": url, "kind": kind, "note": note} for name, url, kind, note in ghana_sources.EXTERNAL_SOURCES]
-    return {"updated_at": state.get("completed_at"), "imported": imported, "external": external}
-
-
-@router.get("/catalogue")
-def search_catalogue(request: Request):
-    p = request.query_params
-    category = p.get("category", "jobs")
-    q = p.get("q", "").strip().lower()[:200]
-    if category not in ["jobs", "early", "remote", "scholarships"]:
-        raise HTTPException(400, "Choose a listing category.")
-    try:
-        page = max(1, min(50, int(p.get("page", "1"))))
-    except ValueError:
-        page = 1
-    rows = active_rows()
-    # When a board repeats an employer's posting, show the employer record first.
-    rows.sort(key=lambda row: row["payload"].get("description_kind") == "source_summary")
-    jobs = []
-    seen = set()
-    for row in rows:
-        j = row["payload"]
-        j["first_seen_at"] = row["first_seen_at"]
-        if category == "scholarships":
-            j["listing_status"] = scholarship_state(j)
-            j["can_apply"] = j["listing_status"] == "open"
-            availability = p.get("availability", "open")
-            if availability not in ["all", "open", "unconfirmed", "closed"]:
-                raise HTTPException(400, "Choose a scholarship status.")
-            if availability != "all" and j["listing_status"] != availability:
-                continue
-        elif row["deadline"] and date(row["deadline"]) < NOW():
-            continue
-        if j.get("category") != category:
-            continue
-        if any(
-            word
-            not in (j["title"] + " " + j["company"] + " " + j["description"]).lower()
-            for word in q.split()
-        ):
-            continue
-        if p.get("region") and p["region"] not in j.get("regions", []):
-            continue
-        if p.get("town") and p["town"].lower() not in j.get("location", "").lower():
-            continue
-        if (
-            p.get("job_type")
-            and p["job_type"] != "all"
-            and p["job_type"] != j.get("job_type")
-        ):
-            continue
-        if p.get("experience") and p["experience"] != j.get("experience"):
-            continue
-        if p.get("study_level") and p["study_level"] not in j.get("study_levels", []):
-            continue
-        if p.get("destination") and p["destination"] != j.get("study_destination"):
-            continue
-        if p.get("funding") and p["funding"] != j.get("funding"):
-            continue
-        if (
-            p.get("industry")
-            and p["industry"].lower()
-            not in (
-                j.get("industry", "") + " " + j["title"] + " " + j["description"]
-            ).lower()
-        ):
-            continue
-        identity = (
-            j["id"]
-            if category == "scholarships"
-            else job_identity(j)
-        )
-        if identity in seen:
-            continue
-        seen.add(identity)
-        j.pop("check_url", None)
-        jobs.append(j)
-    jobs.sort(
-        key=lambda j: j.get("created") or j.get("first_seen_at", ""), reverse=True
-    )
-    state = (
+    rows = (
         supabase.table("catalogue_refresh")
         .select("completed_at,summary")
         .eq("id", 1)
         .execute()
         .data
     )
+    state = rows[0] if rows else {}
+    health = {x["source"]: x for x in state.get("summary", [])}
+    registry = dict(ghana_sources.SOURCE_INFO)
+    for board in SMART:
+        registry["smart:" + board] = (
+            board.replace("Deloitte6", "Deloitte")
+            .replace("AccorHotel", "Accor")
+            .replace("AECOM2", "AECOM")
+            .replace("StandardBankGroup", "Standard Bank")
+            .replace("MastercardFoundation", "Mastercard Foundation"),
+            f"https://careers.smartrecruiters.com/{board}",
+            "Direct employer",
+            "Public employer board. Only explicit Ghana locations qualify.",
+        )
+    for board, name in GREENHOUSE.items():
+        registry["greenhouse:" + board] = (
+            name,
+            f"https://job-boards.greenhouse.io/{board}",
+            "Direct employer",
+            "Public employer board. Remote roles must explicitly accept applicants in Ghana.",
+        )
+    registry["anglogold"] = (
+        "AngloGold Ashanti",
+        "https://careers.anglogoldashanti.com/",
+        "Direct employer",
+        "Public employer board, checked for Ghana location and closing dates.",
+    )
+    registry["scholarships-authority"] = (
+        "Ghana Scholarships Authority",
+        "https://scholarships.gov.gh/opportunities",
+        "Scholarships",
+        "Official notices. Open, unconfirmed and archived notices have separate views.",
+    )
+    checked = date(state.get("completed_at"))
+    current = bool(checked and checked >= NOW() - timedelta(hours=48))
+    imported = []
+    for key, (name, url, kind, note) in registry.items():
+        status = health.get(key, {})
+        imported.append(
+            {
+                "key": key,
+                "name": name,
+                "url": url,
+                "kind": kind,
+                "note": note,
+                "state": (
+                    status.get("state", "not_checked")
+                    if current
+                    else "awaiting_refresh"
+                ),
+                "accepted": status.get("accepted", 0) if current else 0,
+            }
+        )
+    external = [
+        {"name": name, "url": url, "kind": kind, "note": note}
+        for name, url, kind, note in ghana_sources.EXTERNAL_SOURCES
+    ]
     return {
-        "jobs": jobs[(page - 1) * 20 : page * 20],
-        "total": len(jobs),
-        "page": page,
-        "has_more": page * 20 < len(jobs),
-        "updated_at": state[0].get("completed_at") if state else None,
-        "source_status": state[0].get("summary", []) if state else [],
+        "updated_at": state.get("completed_at"),
+        "imported": imported,
+        "external": external,
+    }
+
+
+def refresh_state():
+    rows = (
+        supabase.table("catalogue_refresh")
+        .select("completed_at,next_refresh_at,summary,last_error,archive_page")
+        .eq("id", 1)
+        .execute()
+        .data
+    )
+    return rows[0] if rows else {}
+
+
+def query_catalogue(params):
+    p = {str(k): str(v)[:200] for k, v in params.items()}
+    if p.get("category", "jobs") not in ["jobs", "early", "remote", "scholarships"]:
+        raise HTTPException(400, "Choose a listing category.")
+    if p.get("availability", "open") not in ["all", "open", "unconfirmed", "closed"]:
+        raise HTTPException(400, "Choose a scholarship status.")
+    try:
+        p["page"] = str(max(1, min(1000000, int(p.get("page", "1")))))
+        for key in ["salary_min", "salary_max"]:
+            if p.get(key) and (not float(p[key]) >= 0 or float(p[key]) > 1e12):
+                raise ValueError()
+        if (
+            p.get("salary_min")
+            and p.get("salary_max")
+            and float(p["salary_min"]) > float(p["salary_max"])
+        ):
+            raise ValueError()
+    except ValueError:
+        raise HTTPException(400, "Enter a valid page and salary range.")
+    result = supabase.rpc("search_ghana_catalogue", {"filters": p}).execute().data
+    return result
+
+
+@router.get("/catalogue")
+def search_catalogue(request: Request, background_tasks: BackgroundTasks = None):
+    result = query_catalogue(dict(request.query_params))
+    state = refresh_state()
+    due = date(state.get("next_refresh_at"))
+    if background_tasks is not None and due and due <= NOW():
+        background_tasks.add_task(refresh)
+    return {
+        **result,
+        "updated_at": state.get("completed_at"),
+        "source_status": state.get("summary", []),
         "errors": [],
     }
 
 
+@router.get("/catalogue/coverage")
+def catalogue_coverage():
+    counts = {"jobs": 0, "early": 0, "remote": 0, "scholarships": 0}
+    regions = {name: 0 for name in REGIONS}
+    missing = {"deadline": 0, "experience": 0, "salary": 0}
+    for row in active_rows():
+        j = row["payload"]
+        if j.get("duplicate_of"):
+            continue
+        if j.get("category") == "scholarships":
+            if scholarship_state(j) != "open":
+                continue
+        elif row.get("deadline") and date(row["deadline"]) < NOW():
+            continue
+        counts[j["category"]] += 1
+        if j.get("category") != "scholarships":
+            for region in j.get("regions", []):
+                if region in regions:
+                    regions[region] += 1
+            missing["deadline"] += not bool(j.get("deadline"))
+            missing["experience"] += j.get("experience") == "unspecified"
+            missing["salary"] += (
+                j.get("salary_min") is None and j.get("salary_max") is None
+            )
+    state = refresh_state()
+    checked = date(state.get("completed_at"))
+    return {
+        "categories": counts,
+        "regions": regions,
+        "missing_fields": missing,
+        "updated_at": state.get("completed_at"),
+        "healthy": bool(checked and checked > NOW() - timedelta(hours=48)),
+        "last_error": state.get("last_error"),
+        "sources_with_listings": sum(
+            s.get("accepted", 0) > 0 for s in state.get("summary", [])
+        ),
+    }
+
+
+@router.get("/catalogue/sitemap")
+def sitemap_listings(offset: int = 0):
+    rows = (
+        supabase.table("job_catalogue")
+        .select("id,payload,first_seen_at,last_checked_at,deadline")
+        .eq("status", "active")
+        .gte("last_checked_at", (NOW() - timedelta(hours=48)).isoformat())
+        .order("id")
+        .range(max(0, offset), max(0, offset) + 999)
+        .execute()
+        .data
+    )
+    jobs = []
+    for row in rows:
+        j = row["payload"]
+        if j.get("duplicate_of"):
+            continue
+        if j.get("category") == "scholarships" and scholarship_state(j) != "open":
+            continue
+        if (
+            j.get("category") != "scholarships"
+            and row.get("deadline")
+            and date(row["deadline"]) < NOW()
+        ):
+            continue
+        jobs.append(
+            {"id": row["id"], "updated_at": j.get("created") or row["first_seen_at"]}
+        )
+    return {"jobs": jobs, "has_more": len(rows) == 1000, "next_offset": offset + 1000}
+
+
 @router.get("/catalogue/{job_id}")
-async def catalogue_details(job_id: str):
+async def catalogue_details(job_id: str, verify: bool = False):
     if not re.fullmatch("[a-f0-9]{32}", job_id):
         raise HTTPException(404, "This listing is no longer in the Ghana catalogue.")
     rows = (
@@ -890,7 +1055,7 @@ async def catalogue_details(job_id: str):
     if not rows:
         raise HTTPException(404, "Opportunity not found.")
     row = rows[0]
-    j = row["payload"]
+    j = dict(row["payload"])
     j["first_seen_at"] = row["first_seen_at"]
     is_scholarship = j.get("category") == "scholarships"
     if is_scholarship:
@@ -913,16 +1078,21 @@ async def catalogue_details(job_id: str):
     # Recheck the allowlisted source endpoint on detail views, never arbitrary stored links.
     check = j.get("check_url")
     host = urlparse(check or "").hostname
-    if check and host in [
-        "api.smartrecruiters.com",
-        "boards-api.greenhouse.io",
-        "careers.anglogoldashanti.com",
-        "www.ghanacurrentjobs.com",
-        "hiregh.com",
-        "www.glmis.gov.gh",
-        "jobs.newmont.com",
-        "telecel.zohorecruit.com",
-    ]:
+    if (
+        verify
+        and check
+        and host
+        in [
+            "api.smartrecruiters.com",
+            "boards-api.greenhouse.io",
+            "careers.anglogoldashanti.com",
+            "www.ghanacurrentjobs.com",
+            "hiregh.com",
+            "www.glmis.gov.gh",
+            "jobs.newmont.com",
+            "telecel.zohorecruit.com",
+        ]
+    ):
         try:
             async with httpx.AsyncClient(
                 timeout=10, follow_redirects=True, headers=HEADERS
@@ -938,7 +1108,12 @@ async def catalogue_details(job_id: str):
                     503,
                     "The source could not confirm this opportunity. Please try again later.",
                 )
-            if host in ["careers.anglogoldashanti.com", "www.ghanacurrentjobs.com", "hiregh.com", "www.glmis.gov.gh"]:
+            if host in [
+                "careers.anglogoldashanti.com",
+                "www.ghanacurrentjobs.com",
+                "hiregh.com",
+                "www.glmis.gov.gh",
+            ]:
                 body = text(r.text)
                 soup = BeautifulSoup(r.text, "html.parser")
                 expiry = soup.select_one("[itemprop=validThrough]")
@@ -956,28 +1131,63 @@ async def catalogue_details(job_id: str):
                     ).execute()
                     raise HTTPException(410, "The source closed this opportunity.")
                 if host in ["www.ghanacurrentjobs.com", "www.glmis.gov.gh"]:
-                    parser = ghana_sources.parse_current_jobs if host == "www.ghanacurrentjobs.com" else ghana_sources.parse_glmis
+                    parser = (
+                        ghana_sources.parse_current_jobs
+                        if host == "www.ghanacurrentjobs.com"
+                        else ghana_sources.parse_glmis
+                    )
                     fresh = parser(soup, check)
                     if not fresh:
-                        raise HTTPException(503, "The original posting needs a fresh eligibility check. Please try another current opportunity.")
-                    j.update({k: v for k, v in fresh.items() if k not in ["id", "first_seen_at"]})
+                        raise HTTPException(
+                            503,
+                            "The original posting needs a fresh eligibility check. Please try another current opportunity.",
+                        )
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
             if host == "jobs.newmont.com":
-                fresh = ghana_sources.parse_newmont(BeautifulSoup(r.text, "html.parser"), check)
+                fresh = ghana_sources.parse_newmont(
+                    BeautifulSoup(r.text, "html.parser"), check
+                )
                 if not fresh:
-                    supabase.table("job_catalogue").update({"status": "closed"}).eq("id", job_id).execute()
-                    raise HTTPException(410, "The employer no longer lists this Ghana opportunity as open.")
+                    supabase.table("job_catalogue").update({"status": "closed"}).eq(
+                        "id", job_id
+                    ).execute()
+                    raise HTTPException(
+                        410,
+                        "The employer no longer lists this Ghana opportunity as open.",
+                    )
             if host == "telecel.zohorecruit.com":
                 rows = ghana_sources.telecel_rows(BeautifulSoup(r.text, "html.parser"))
-                fresh = next((ghana_sources.parse_telecel(row) for row in rows if str(row.get("id")) == j.get("employer_job_id")), None)
+                fresh = next(
+                    (
+                        ghana_sources.parse_telecel(row)
+                        for row in rows
+                        if str(row.get("id")) == j.get("employer_job_id")
+                    ),
+                    None,
+                )
                 if not fresh:
-                    supabase.table("job_catalogue").update({"status": "closed"}).eq("id", job_id).execute()
-                    raise HTTPException(410, "The employer no longer lists this Ghana opportunity as open.")
+                    supabase.table("job_catalogue").update({"status": "closed"}).eq(
+                        "id", job_id
+                    ).execute()
+                    raise HTTPException(
+                        410,
+                        "The employer no longer lists this Ghana opportunity as open.",
+                    )
         except httpx.HTTPError:
             raise HTTPException(
                 503,
                 "The source could not confirm this opportunity. Please try again later.",
             )
         except (ValueError, KeyError, TypeError):
-            raise HTTPException(503, "The source format changed and this posting could not be confirmed.")
+            raise HTTPException(
+                503,
+                "The source format changed and this posting could not be confirmed.",
+            )
     j.pop("check_url", None)
     return j

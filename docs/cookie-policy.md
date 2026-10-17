@@ -1,29 +1,25 @@
 # Cookie Policy
 
-**Last Updated:** October 1, 2026
+Last updated: October 17, 2026
 
-jobs.ac.ghana uses minimal cookies to keep you logged in and remember your preferences.
+jobs.ac.ghana uses essential sign-in storage and optional analytics.
 
-## What We Use
+## Essential storage
 
-| Cookie | Purpose | Duration |
-|---|---|---|
-| Session cookie | Keeps you logged in | Session |
-| Country preference | Remembers your country | 1 year |
-| Theme preference | Remembers light/dark mode | 1 year |
+zag_session is an HttpOnly sign-in cookie lasting up to 12 hours. Logging out revokes account sessions on the server. zag_pkce and zag_oauth_state protect optional Google sign-in and expire after 10 minutes. Essential cookies use SameSite=Lax and Secure in production.
 
-## What We Don't Use
+Saved searches and application records belong to your account in the database. CV assistance is retired and no new CV text is accepted.
 
-- No advertising cookies
-- No cross-site tracking
-- No session replay
-- No third-party marketing cookies
+## Optional analytics
 
-## Your Control
+Google Analytics loads only after Allow analytics. It measures public page views and fixed actions such as Apply, sign-in, saving and sharing. We exclude search query parameters, URL fragments, private-page URLs, names, emails and application contents. Google may process device, browser, approximate location and the origin of a referring website.
 
-You can clear cookies in your browser at any time. This will log you out and reset your preferences.
+Analytics cookies include _ga and _ga_3N6T2M5ED8, configured to expire after six months. Your choice is stored on this browser in localStorage as zag_analytics_consent_v1. Declining keeps analytics off. Withdrawing consent clears the analytics cookies used by this site and reloads the page to unload the script.
+
+## Your control
+
+Use Analytics settings at the bottom of any page to change your choice. Clearing browser data signs you out and resets preferences. No advertising cookies or session replay are installed.
 
 ## Contact
 
-**Bless Mawumenyo Zaglago**
-Email: blesszaglago@gmail.com
+Bless Mawumenyo Zaglago · blesszaglago@gmail.com
