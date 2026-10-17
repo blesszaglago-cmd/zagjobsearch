@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SearchForm from "@/components/SearchForm";
+import HomeHero from "@/components/HomeHero";
+import HomeOpportunities from "@/components/HomeOpportunities";
 import { siteUrl } from "@/lib/site";
+
 export const metadata: Metadata = {
   title: {
     absolute: "ZagJobSearch | Jobs in Ghana, Internships & Scholarships",
@@ -12,41 +16,49 @@ export const metadata: Metadata = {
     "Find jobs across Ghana, internships, remote roles accepting Ghana-based applicants and scholarships for Ghanaians. Track your applications in one place.",
   alternates: { canonical: "/" },
 };
-const paths = [
-  [
-    "01",
-    "Jobs in Ghana",
-    "From Accra to opportunities across the country.",
-    "/search?category=jobs",
-    "lavender",
-  ],
-  [
-    "02",
-    "Internships & early careers",
-    "Internships, graduate programmes and apprenticeships.",
-    "/search?category=early",
-    "mint",
-  ],
-  [
-    "03",
-    "Remote from Ghana",
-    "Roles with explicit eligibility for Ghana-based applicants.",
-    "/search?category=remote",
-    "peach",
-  ],
-  [
-    "04",
-    "Scholarships",
-    "Study in Ghana or abroad, with Ghanaian eligibility.",
-    "/search?category=scholarships",
-    "lavender",
-  ],
+const pathways = [
+  {
+    title: "I’m looking for a job",
+    description:
+      "Permanent, part-time and contract opportunities, from Accra to the rest of Ghana.",
+    href: "/search?category=jobs",
+    image: "/images/professionals.jpg",
+    label: "Find jobs in Ghana",
+    number: "01",
+  },
+  {
+    title: "I’m starting my career",
+    description:
+      "Find your first experience through internships, graduate roles and apprenticeships.",
+    href: "/search?category=early",
+    image: "/images/teamwork.jpg",
+    label: "Explore early careers",
+    number: "02",
+  },
+  {
+    title: "I want to work remotely",
+    description:
+      "Explore remote roles that explicitly accept applications from people based in Ghana.",
+    href: "/search?category=remote",
+    image: "/images/workplace.jpg",
+    label: "See Ghana-eligible roles",
+    number: "03",
+  },
+  {
+    title: "I’m looking for a scholarship",
+    description:
+      "Browse Scholsec notices by study level, destination and application status.",
+    href: "/search?category=scholarships",
+    image: "/images/ghana-students.jpg",
+    label: "Explore scholarships",
+    number: "04",
+  },
 ];
 export default function Home() {
   return (
     <>
       <Header />
-      <main id="main-content" className="gh-home">
+      <main id="main-content" className="portal-home">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -58,175 +70,290 @@ export default function Home() {
             }).replace(/</g, "\\u003c"),
           }}
         />
-        <div className="shell">
-          <section className="gh-hero photo-section photo-team">
-            <div className="gh-hero-copy">
-              <p className="eyebrow">
-                <span className="ghana-flag" aria-label="Ghana flag">
-                  ★
-                </span>{" "}
-                MADE FOR YOUR NEXT MOVE IN GHANA
-              </p>
-              <h1>
-                Your talent.
-                <br />
-                Your next role.
-                <br />
-                <span>Right here in Ghana.</span>
-              </h1>
-              <p>
-                Find jobs, internships and scholarships with clear sources and
-                application links. Keep your applications organised as you move
-                forward.
-              </p>
-              <Link href="/search" className="btn-primary">
-                Explore Ghana jobs ↗
-              </Link>
+        <HomeHero />
+        <section className="portal-search shell" aria-label="Search Ghana jobs">
+          <div className="portal-search-heading">
+            <span>YOUR NEXT CHAPTER STARTS WITH A SEARCH</span>
+            <Link href="/search?category=jobs&region=Greater+Accra">
+              Start with Accra & Greater Accra ↗
+            </Link>
+          </div>
+          <SearchForm />
+          <div className="portal-search-shortcuts">
+            <span>Explore</span>
+            <Link href="/search?category=jobs">Jobs across Ghana</Link>
+            <Link href="/search?category=early&job_type=internship">
+              Internships
+            </Link>
+            <Link href="/search?category=scholarships">Scholarships</Link>
+          </div>
+        </section>
+        <div className="portal-trust shell" aria-label="How ZagJobSearch works">
+          {[
+            ["16", "Region filters across Ghana"],
+            ["4", "Separate opportunity categories"],
+            ["Free", "Search and apply at the source"],
+            ["Private", "Your application workspace"],
+          ].map(([value, label]) => (
+            <div key={value}>
+              <strong>{value}</strong>
+              <span>{label}</span>
             </div>
-            <div className="gh-hero-art" aria-hidden="true">
-              <div className="kente-ribbon" />
-              <div className="gh-art-card">
-                <span className="gh-art-label">YOUR SEARCH, YOUR WAY</span>
-                <h2>
-                  Where will
-                  <br />
-                  you go next?
-                </h2>
-                <div className="gh-city-list">
-                  <span>Accra</span>
-                  <span>Kumasi</span>
-                  <span>Takoradi</span>
-                  <span>Tamale</span>
-                  <span>Ho</span>
-                  <span>Across Ghana</span>
-                </div>
-                <p>Jobs · Internships · Scholarships</p>
-              </div>
-              <div className="ghana-star">★</div>
-            </div>
-          </section>
-          <section
-            className="search-section photo-section photo-desk"
-            aria-label="Search Ghana jobs"
-          >
-            <SearchForm />
-            <div className="search-bottom">
-              <div className="popular">
-                <span>Start here</span>
-                <Link href="/search?category=jobs&region=Greater+Accra">
-                  Accra & Greater Accra ↗
-                </Link>
-                <Link href="/search?category=early&job_type=internship">
-                  Internships ↗
-                </Link>
-                <Link href="/search?category=jobs">Across Ghana ↗</Link>
-              </div>
-            </div>
-          </section>
-          <section className="gh-pathways photo-section photo-workplace">
-            <div className="section-heading">
+          ))}
+        </div>
+        <section className="portal-section portal-latest portal-watermark watermark-office">
+          <div className="shell">
+            <div className="portal-section-heading">
               <div>
-                <p className="eyebrow muted">CHOOSE YOUR PATH</p>
+                <p className="portal-eyebrow">LATEST OPPORTUNITIES</p>
                 <h2>
-                  Different opportunities.
-                  <br />A search that fits each one.
+                  Your next step
+                  <br />
+                  could be right here.
                 </h2>
               </div>
+              <div>
+                <p>
+                  Explore source-linked roles and open scholarship notices. Read
+                  the full details, then apply on the original website.
+                </p>
+                <Link href="/search" className="portal-text-link">
+                  View all opportunities <span aria-hidden="true">↗</span>
+                </Link>
+              </div>
             </div>
-            <div className="gh-path-grid">
-              {paths.map(([n, title, desc, url, tone]) => (
-                <Link className={`gh-path ${tone}`} href={url} key={n}>
-                  <span className="gh-path-number">{n}</span>
-                  <h3>{title}</h3>
-                  <p>{desc}</p>
-                  <span className="gh-path-cta">Explore →</span>
+            <HomeOpportunities />
+          </div>
+        </section>
+        <section className="portal-section portal-routes portal-watermark watermark-students">
+          <div className="shell">
+            <div className="portal-section-heading centered">
+              <div>
+                <p className="portal-eyebrow">FIND YOUR ROUTE</p>
+                <h2>
+                  Different ambitions.
+                  <br />A clear path for each.
+                </h2>
+                <p>
+                  Start with what you’re looking for. Each category has its own
+                  filters, so jobs, internships and scholarships stay organised.
+                </p>
+              </div>
+            </div>
+            <div className="portal-route-grid">
+              {pathways.map((path) => (
+                <Link
+                  href={path.href}
+                  className="portal-route-card"
+                  key={path.number}
+                >
+                  <div className="portal-route-photo">
+                    <Image
+                      src={path.image}
+                      alt=""
+                      fill
+                      sizes="(max-width: 600px) 90vw, (max-width: 1000px) 45vw, 280px"
+                    />
+                    <span>{path.number}</span>
+                  </div>
+                  <div className="portal-route-body">
+                    <h3>{path.title}</h3>
+                    <p>{path.description}</p>
+                    <span className="portal-card-link">
+                      {path.label} <span aria-hidden="true">↗</span>
+                    </span>
+                  </div>
                 </Link>
               ))}
             </div>
-          </section>
-          <section className="gh-tracker photo-section photo-desk">
-            <div>
-              <p className="eyebrow">KEEP YOUR NEXT STEP IN SIGHT</p>
+          </div>
+        </section>
+        <section className="portal-section portal-workspace portal-watermark watermark-desk">
+          <div className="shell portal-feature-grid">
+            <div className="portal-photo-stack">
+              <div className="portal-photo-main">
+                <Image
+                  src="/images/professionals.jpg"
+                  alt="Professionals sharing ideas around a table"
+                  fill
+                  sizes="(max-width: 800px) 90vw, 560px"
+                />
+              </div>
+              <div className="portal-photo-small">
+                <Image
+                  src="/images/ghana-students.jpg"
+                  alt="Students on a university campus in Accra, Ghana"
+                  fill
+                  sizes="(max-width: 800px) 45vw, 260px"
+                />
+              </div>
+              <span className="portal-photo-note">
+                Your ambition deserves a clear next step.
+              </span>
+            </div>
+            <div className="portal-feature-copy">
+              <p className="portal-eyebrow">MORE THAN A SEARCH</p>
               <h2>
-                Every application.
+                One place for
                 <br />
-                One private workspace.
+                your whole job hunt.
               </h2>
               <p>
-                Remember where you applied, update your progress and keep notes
-                for your follow-up. Search and apply freely. Create an account
-                when you want to track your applications.
+                Finding the opportunity is only the beginning. Keep a private
+                record of where you applied, what happened next and what you
+                need to remember.
               </p>
-              <Link href="/tracker" className="btn-primary">
-                Open application tracker ↗
-              </Link>
+              <ul className="portal-check-list">
+                <li>Save the role, company and original application link.</li>
+                <li>Update your status as your application progresses.</li>
+                <li>Keep notes, contacts and follow-up dates together.</li>
+              </ul>
+              <div className="portal-actions">
+                <Link href="/tracker" className="portal-button green">
+                  Open application tracker ↗
+                </Link>
+                <Link href="/signup" className="portal-text-link">
+                  Create a free account →
+                </Link>
+              </div>
+              <p className="portal-small-note">
+                No account needed to search or visit an application website.
+              </p>
             </div>
-            <div className="gh-tracker-preview" aria-hidden="true">
-              <span>YOUR APPLICATION JOURNEY</span>
+          </div>
+        </section>
+        <section className="portal-section portal-journey">
+          <div className="shell">
+            <div className="portal-section-heading">
               <div>
-                <i />
-                Started
+                <p className="portal-eyebrow">YOUR APPLICATION JOURNEY</p>
+                <h2>
+                  Less searching in circles.
+                  <br />
+                  More moving forward.
+                </h2>
               </div>
-              <div>
-                <i />
-                Applied
-              </div>
-              <div>
-                <i />
-                Interview
-              </div>
-              <p>Illustration of tracker statuses</p>
+              <p>
+                From your first search to your next follow-up, keep the
+                important steps in sight.
+              </p>
             </div>
-          </section>
-          <section className="gh-quality">
-            <p className="eyebrow muted">CLEAR SOURCES. USEFUL DETAILS.</p>
-            <h2>Know what you’re applying for.</h2>
-            <div className="steps-grid">
+            <div className="portal-steps">
               {[
                 [
                   "01",
-                  "Check the listing",
-                  "See the employer, location, source and deadline when provided.",
+                  "Find your opportunity",
+                  "Choose a category, add your keywords and filter by the details that matter to you.",
                 ],
                 [
                   "02",
-                  "Apply at the source",
-                  "Read the requirements and complete your application on the original website.",
+                  "Read the full details",
+                  "Review the requirements, location, source and deadline before you take the next step.",
                 ],
                 [
                   "03",
-                  "Keep your record",
-                  "Save the opportunity and confirm Applied after you submit.",
+                  "Apply at the source",
+                  "Follow the external link and complete your application on the original website.",
                 ],
-              ].map(([n, t, d]) => (
-                <div className="step" key={n}>
-                  <span className="step-number">{n}</span>
-                  <h3>{t}</h3>
-                  <p>{d}</p>
+                [
+                  "04",
+                  "Keep your record",
+                  "Sign in to save the opportunity. Mark it Applied after you submit, then update your progress.",
+                ],
+              ].map(([number, title, description]) => (
+                <div key={number}>
+                  <span>{number}</span>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
                 </div>
               ))}
             </div>
-            <p className="coverage-note">
-              We collect from supported employer and official sources, check
-              them daily and hide stale listings. Coverage varies by region and
-              industry. A source check does not guarantee an employer’s decision
-              or availability between checks.
+            <div className="portal-source-note">
+              <span aria-hidden="true">↗</span>
+              <div>
+                <strong>Clear sources. Informed applications.</strong>
+                <p>
+                  Supported sources are checked daily. Coverage varies by region
+                  and industry, and availability can change between checks.
+                  Always confirm the details on the original posting.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section className="portal-section portal-faq portal-watermark watermark-office">
+          <div className="shell portal-faq-grid">
+            <div>
+              <p className="portal-eyebrow">A FEW THINGS TO KNOW</p>
+              <h2>
+                Before your
+                <br />
+                next application.
+              </h2>
+              <p>
+                A clearer search starts with knowing how the platform works.
+              </p>
+            </div>
+            <div className="portal-questions">
+              <details>
+                <summary>Do I need an account to apply?</summary>
+                <p>
+                  No. Anyone can search, read a listing and follow its external
+                  application link. An account gives you access to your private
+                  application tracker.
+                </p>
+              </details>
+              <details>
+                <summary>Where do I send my application?</summary>
+                <p>
+                  Use the Apply at source button on a listing. You’ll leave
+                  ZagJobSearch and complete your application on the original
+                  company, organisation or scholarship website.
+                </p>
+              </details>
+              <details>
+                <summary>Are all scholarships still open?</summary>
+                <p>
+                  No. Open awards appear by default. Notices without a confirmed
+                  deadline and closed notices have their own filters. Always
+                  read the official notice for full eligibility and dates.
+                </p>
+              </details>
+              <details>
+                <summary>Does opening Apply mean I have applied?</summary>
+                <p>
+                  No. Visiting an application website does not complete an
+                  application. If you use the tracker, mark it Applied only
+                  after you submit at the source.
+                </p>
+              </details>
+            </div>
+          </div>
+        </section>
+        <section className="portal-final">
+          <div className="shell">
+            <p className="portal-eyebrow">
+              ROOTED IN GHANA. BUILT FOR YOUR NEXT CHAPTER.
             </p>
-          </section>
-          <section className="bottom-cta gh-banner">
-            <p className="eyebrow">YOUR NEXT OPPORTUNITY STARTS HERE</p>
-            <h2>Built for job seekers in Ghana.</h2>
-            <Link
-              href="/search?category=jobs&region=Greater+Accra"
-              className="btn-primary"
-            >
-              Explore Accra jobs ↗
-            </Link>
-            <Link href="/search" className="cta-link">
-              Search across Ghana →
-            </Link>
-          </section>
-        </div>
+            <h2>
+              Your next opportunity
+              <br />
+              is worth looking for.
+            </h2>
+            <p>Find your path. Make your move. Keep your progress.</p>
+            <div className="portal-actions">
+              <Link href="/search" className="portal-button gold">
+                Explore opportunities ↗
+              </Link>
+              <Link
+                href="/search?category=scholarships"
+                className="portal-button ghost"
+              >
+                Browse scholarships
+              </Link>
+            </div>
+          </div>
+        </section>
       </main>
       <Footer />
     </>
