@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
+import AnalyticsConsent from "@/components/AnalyticsConsent";
 export const metadata: Metadata = {
  metadataBase: new URL(siteUrl),
  title: {default: "ZagJobSearch | Jobs, Application Tracker & CV Help", template: "%s | ZagJobSearch"},
@@ -14,4 +15,4 @@ export const metadata: Metadata = {
   other: {"msvalidate.01": "819718EA799FB55CC8FC11E90BE4A7E6"},
  },
 };
-export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><a className="skip-link" href="#main-content">Skip to content</a>{children}</body></html>}
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><a className="skip-link" href="#main-content">Skip to content</a>{children}<AnalyticsConsent/></body></html>}
