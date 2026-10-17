@@ -169,7 +169,7 @@ export default function Details() {
               </p>
               {job.category === "scholarships" && (
                 <p>
-                  {job.eligibility_note}. Published by Scholsec. ZagJobSearch is
+                  {job.eligibility_note}. Published by Scholsec. jobs.ac.ghana is
                   an independent listing service.
                 </p>
               )}

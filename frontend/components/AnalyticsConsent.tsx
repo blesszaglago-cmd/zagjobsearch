@@ -81,7 +81,7 @@ export default function AnalyticsConsent() {
     analytics.gtag("event", "page_view", {
       page_location: location.origin + pathname,
       page_referrer: "",
-      page_title: pathname === "/" ? "ZagJobSearch" : pathname.startsWith("/jobs/") ? "Job details | ZagJobSearch" : `${pathname.slice(1)} | ZagJobSearch`,
+      page_title: pathname === "/" ? "jobs.ac.ghana" : pathname.startsWith("/jobs/") ? "Job details | jobs.ac.ghana" : `${pathname.slice(1)} | jobs.ac.ghana`,
     });
   }, [choice, pathname, publicPage]);
 
@@ -101,7 +101,7 @@ export default function AnalyticsConsent() {
   return <>
     <div className="analytics-settings"><button type="button" onClick={() => setSettingsOpen(true)}>Analytics settings</button></div>
     {choice === null || settingsOpen ? <section className="analytics-banner" aria-label="Analytics preferences">
-      <div><h2>Help improve ZagJobSearch</h2><p>Allow optional Google Analytics to measure visits to public pages. Your private application records stay out of analytics. <Link href="/cookies">Cookie details</Link></p></div>
+      <div><h2>Help improve jobs.ac.ghana</h2><p>Allow optional Google Analytics to measure visits to public pages. Your private application records stay out of analytics. <Link href="/cookies">Cookie details</Link></p></div>
       <div className="analytics-actions"><button type="button" className="btn-outline" onClick={() => choose("denied")}>Decline analytics</button><button type="button" className="btn-primary" onClick={() => choose("granted")}>Allow analytics</button>{choice !== null ? <button type="button" className="text-action" onClick={() => setSettingsOpen(false)}>Close</button> : null}</div>
     </section> : null}
   </>;

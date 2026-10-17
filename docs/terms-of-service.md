@@ -2,11 +2,11 @@
 
 **Last Updated:** October 1, 2026
 
-Welcome to ZagJobSearch. By using our Service, you agree to these Terms.
+Welcome to jobs.ac.ghana. By using our Service, you agree to these Terms.
 
-## 1. What ZagJobSearch Is
+## 1. What jobs.ac.ghana Is
 
-ZagJobSearch is a **job search aggregator**. We help you find job listings from third-party sources (Adzuna, Himalayas) based on your search criteria.
+jobs.ac.ghana is a **job search aggregator**. We help you find job listings from third-party sources (Adzuna, Himalayas) based on your search criteria.
 
 **We do not:**
 - Verify job listings
@@ -15,7 +15,7 @@ ZagJobSearch is a **job search aggregator**. We help you find job listings from 
 - Guarantee job placement
 - Store or host job listings
 
-When you click "Apply," you leave ZagJobSearch and go to the source site. Your relationship is with that site and that employer — not us.
+When you click "Apply," you leave jobs.ac.ghana and go to the source site. Your relationship is with that site and that employer — not us.
 
 ## 2. Your Account
 
@@ -40,7 +40,7 @@ We may suspend or terminate accounts that violate these rules.
 
 ## 4. Third-Party Content
 
-Job listings shown on ZagJobSearch are owned by third parties (Adzuna, Himalayas, and the employers listed). We do not own, control, or endorse them.
+Job listings shown on jobs.ac.ghana are owned by third parties (Adzuna, Himalayas, and the employers listed). We do not own, control, or endorse them.
 
 We are not responsible for:
 - Accuracy of job listings
@@ -50,7 +50,7 @@ We are not responsible for:
 
 ## 5. Limitation of Liability
 
-To the fullest extent permitted by law, ZagJobSearch is provided "as is" without warranties. We are not liable for:
+To the fullest extent permitted by law, jobs.ac.ghana is provided "as is" without warranties. We are not liable for:
 - Missed job opportunities
 - Errors in job listings
 - Data loss

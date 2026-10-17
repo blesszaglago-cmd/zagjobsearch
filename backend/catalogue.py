@@ -53,7 +53,7 @@ GREENHOUSE = {
     "flyzipline": "Zipline",
 }
 HEADERS = {
-    "User-Agent": "ZagJobSearch/2.0 (+https://zagjobsearch.vercel.app; public vacancy checks)"
+    "User-Agent": "jobs.ac.ghana/2.0 (+https://zagjobsearch.vercel.app; public vacancy checks)"
 }
 
 

@@ -1611,3 +1611,117 @@ summary:focus-visible {
     transform: none;
   }
 }
+/* jobs.ac.ghana: the supplied briefcase/search mark with a readable wordmark. */
+.brand-jobs {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: auto;
+  flex-shrink: 0;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: #102e3c;
+}
+.brand-jobs img {
+  display: block;
+  flex: none;
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+.brand-wordmark {
+  font-family: var(--font-lato), Arial, sans-serif;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.8px;
+  color: #102e3c;
+}
+.brand-wordmark > span {
+  color: #ba8600;
+}
+.site-footer .brand-jobs {
+  width: fit-content;
+  background: #fff;
+  border-radius: 6px;
+  padding: 9px 14px;
+}
+.site-footer .brand-jobs img {
+  width: 54px;
+  height: 54px;
+}
+.site-footer .brand-wordmark {
+  font-size: 25px;
+}
+@media (max-width: 1100px) {
+  .brand-jobs img {
+    width: 50px;
+    height: 50px;
+  }
+  .brand-wordmark {
+    font-size: 23px;
+  }
+  .nav-inner {
+    gap: 18px;
+  }
+  .nav-links {
+    gap: 14px;
+  }
+}
+@media (max-width: 600px) {
+  .brand-jobs {
+    gap: 6px;
+  }
+  .brand-jobs img {
+    width: 42px;
+    height: 42px;
+  }
+  .brand-wordmark {
+    font-size: 21px;
+    letter-spacing: -0.65px;
+  }
+  .nav-inner {
+    gap: 12px;
+  }
+  .nav-actions {
+    gap: 12px;
+  }
+  .nav-actions .btn-primary {
+    padding: 12px;
+    font-size: 11px;
+  }
+}
+@media (max-width: 420px) {
+  .brand-jobs img {
+    width: 36px;
+    height: 36px;
+  }
+  .brand-wordmark {
+    font-size: 19px;
+    letter-spacing: -0.6px;
+  }
+  .nav-inner {
+    gap: 10px;
+  }
+  .nav-actions {
+    gap: 10px;
+  }
+  .nav-actions .btn-primary {
+    padding: 11px 10px;
+    font-size: 10px;
+  }
+}
+@media (max-width: 360px) {
+  .nav-inner {
+    height: auto;
+    min-height: 104px;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    gap: 10px 22px;
+  }
+  .nav-actions {
+    justify-content: center;
+  }
+}
