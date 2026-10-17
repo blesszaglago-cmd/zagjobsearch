@@ -4,14 +4,25 @@ import AccountNav from "./AccountNav";
 export default function Header() {
   return (
     <header className="site-header">
+      <div className="portal-topbar">
+        <div className="shell">
+          <span>
+            <span className="ghana-flag" aria-label="Ghana flag" />
+            Built for Ghana. Made for your next move.
+          </span>
+          <span>Search freely. Apply at the source.</span>
+        </div>
+      </div>
       <nav className="shell nav-inner" aria-label="Main navigation">
         <Logo />
         <div className="nav-links">
+          <Link href="/">Home</Link>
           <Link href="/search">Find jobs</Link>
-          <Link href="/tracker">Application tracker</Link>
+          <Link href="/tracker">Tracker</Link>
           <Link href="/search?category=early&job_type=internship">
             Internships
           </Link>
+          <Link href="/search?category=scholarships">Scholarships</Link>
         </div>
         <AccountNav />
       </nav>

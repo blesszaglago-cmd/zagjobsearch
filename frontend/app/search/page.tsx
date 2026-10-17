@@ -84,7 +84,7 @@ function SearchContent() {
     <>
       <Header />
       <main id="main-content" className="shell gh-search">
-        <section className="search-banner gh-banner">
+        <section className="search-banner gh-banner" data-category={category}>
           <p className="eyebrow">OPPORTUNITIES FOR GHANA</p>
           <h1>
             {scholarship
