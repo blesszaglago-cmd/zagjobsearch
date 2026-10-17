@@ -2,7 +2,7 @@
 
 **Last Updated:** October 1, 2026
 
-ZagJobSearch uses minimal cookies to keep you logged in and remember your preferences.
+jobs.ac.ghana uses minimal cookies to keep you logged in and remember your preferences.
 
 ## What We Use
 

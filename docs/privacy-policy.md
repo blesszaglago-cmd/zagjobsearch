@@ -2,7 +2,7 @@
 
 **Last Updated:** October 1, 2026
 
-ZagJobSearch ("we," "us," or "our") operates zagjobsearch.vercel.app (the "Service"). This Privacy Policy explains how we collect, use, and protect your information.
+jobs.ac.ghana ("we," "us," or "our") operates zagjobsearch.vercel.app (the "Service"). This Privacy Policy explains how we collect, use, and protect your information.
 
 ## 1. Information We Collect
 

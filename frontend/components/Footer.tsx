@@ -34,7 +34,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="shell portal-footer-note">
-        Independent opportunity platform. ZagJobSearch is not a government
+        Independent opportunity platform. jobs.ac.ghana is not a government
         agency and is not affiliated with the Ghana Scholarships Authority.{" "}
         <details>
           <summary>Photography credits</summary>
@@ -56,14 +56,14 @@ export default function Footer() {
               Creab ThePolymath / Unsplash
             </a>
             . Office photography via Unsplash. Images illustrate work and study;
-            people pictured are not presented as ZagJobSearch users or
+            people pictured are not presented as jobs.ac.ghana users or
             endorsers.
           </p>
         </details>
       </div>
       <div className="shell footer-bottom">
         <span>
-          © {new Date().getFullYear()} ZagJobSearch. Built by Bless Zaglago.
+          © {new Date().getFullYear()} jobs.ac.ghana. Built by Bless Zaglago.
         </span>
         <span>Rooted in Ghana. Made for your next move.</span>
       </div>

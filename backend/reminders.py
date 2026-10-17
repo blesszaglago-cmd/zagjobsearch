@@ -23,7 +23,7 @@ def send_reminders(authorization: str = Header(default='')):
             if not claimed: continue
             try:
                 profile=supabase.table('profiles').select('email').eq('id',item['user_id']).single().execute().data
-                mail=EmailMessage();mail['From']=os.environ['SMTP_FROM'];mail['To']=profile['email'];mail['Subject']='Your ZagJobSearch application reminder'
+                mail=EmailMessage();mail['From']=os.environ['SMTP_FROM'];mail['To']=profile['email'];mail['Subject']='Your jobs.ac.ghana application reminder'
                 mail.set_content(f"Your reminder for {item['job_title']} at {item['company_name']} is due.\n"+(f"Application deadline: {item['deadline']}\n" if item.get('deadline') else '')+f"\nReview your tracker: {os.getenv('FRONTEND_URL','https://zagjobsearch.vercel.app')}/tracker\n\nYou requested this reminder in your application record. You can turn off email reminders there.")
                 smtp.send_message(mail);sent+=1
             except Exception:

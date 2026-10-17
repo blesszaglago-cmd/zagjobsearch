@@ -28,16 +28,16 @@ const raleway = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "ZagJobSearch | Jobs in Ghana & Application Tracker",
-    template: "%s | ZagJobSearch",
+    default: "jobs.ac.ghana | Jobs in Ghana & Application Tracker",
+    template: "%s | jobs.ac.ghana",
   },
   description:
-    "Find jobs across Ghana, internships, scholarships and remote roles accepting Ghana-based applicants. Track your applications with ZagJobSearch.",
-  applicationName: "ZagJobSearch",
+    "Find jobs across Ghana, internships, scholarships and remote roles accepting Ghana-based applicants. Track your applications with jobs.ac.ghana.",
+  applicationName: "jobs.ac.ghana",
   openGraph: {
     type: "website",
-    siteName: "ZagJobSearch",
-    title: "ZagJobSearch | Your next move",
+    siteName: "jobs.ac.ghana",
+    title: "jobs.ac.ghana | Your next move",
     description:
       "Discover jobs in Ghana, internships, scholarships and Ghana-eligible remote roles. Search freely. Apply directly.",
     images: [
@@ -45,13 +45,13 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "ZagJobSearch, your next move",
+        alt: "jobs.ac.ghana, your next move",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "ZagJobSearch | Your next move",
+    title: "jobs.ac.ghana | Your next move",
     description: "Find jobs, internships and scholarships for Ghana.",
     images: ["/opengraph-image"],
   },

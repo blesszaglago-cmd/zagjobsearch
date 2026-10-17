@@ -1,7 +1,7 @@
 """
 main.py
 
-FastAPI server for ZagJobSearch.
+FastAPI server for jobs.ac.ghana.
 Aggregates job listings from multiple sources.
 """
 
@@ -24,7 +24,7 @@ load_dotenv()
 
 
 app = FastAPI(
-    title="ZagJobSearch API",
+    title="jobs.ac.ghana API",
     description="Ghana jobs, remote roles accepting Ghana applicants, and scholarships",
     version="1.0.0",
 )
@@ -42,7 +42,7 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {
-        "message": "ZagJobSearch API is running.",
+        "message": "jobs.ac.ghana API is running.",
         "endpoints": ["/search", "/health"],
     }
 

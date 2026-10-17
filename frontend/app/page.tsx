@@ -10,7 +10,7 @@ import { siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "ZagJobSearch | Jobs in Ghana, Internships & Scholarships",
+    absolute: "jobs.ac.ghana | Jobs in Ghana, Internships & Scholarships",
   },
   description:
     "Find jobs across Ghana, internships, remote roles accepting Ghana-based applicants and scholarships for Ghanaians. Track your applications in one place.",
@@ -65,7 +65,8 @@ export default function Home() {
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "WebSite",
-              name: "ZagJobSearch",
+              name: "jobs.ac.ghana",
+              alternateName: "Jobs AC Ghana",
               url: siteUrl,
             }).replace(/</g, "\\u003c"),
           }}
@@ -88,7 +89,10 @@ export default function Home() {
             <Link href="/search?category=scholarships">Scholarships</Link>
           </div>
         </section>
-        <div className="portal-trust shell" aria-label="How ZagJobSearch works">
+        <div
+          className="portal-trust shell"
+          aria-label="How jobs.ac.ghana works"
+        >
           {[
             ["16", "Region filters across Ghana"],
             ["4", "Separate opportunity categories"],
@@ -307,7 +311,7 @@ export default function Home() {
                 <summary>Where do I send my application?</summary>
                 <p>
                   Use the Apply at source button on a listing. You’ll leave
-                  ZagJobSearch and complete your application on the original
+                  jobs.ac.ghana and complete your application on the original
                   company, organisation or scholarship website.
                 </p>
               </details>

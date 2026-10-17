@@ -1,7 +1,7 @@
 """
 auth.py
 
-Authentication logic for ZagJobSearch.
+Authentication logic for jobs.ac.ghana.
 Handles signup validation, password hashing, and user creation in Supabase.
 """
 
@@ -40,7 +40,7 @@ class SignupRequest(BaseModel):
         today = date.today()
         age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
         if age < 13:
-            raise ValueError("You must be at least 13 years old to use ZagJobSearch")
+            raise ValueError("You must be at least 13 years old to use jobs.ac.ghana")
         return v
 
     @field_validator("accepted_terms")
