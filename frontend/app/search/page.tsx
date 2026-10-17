@@ -97,7 +97,7 @@ function SearchContent() {
           </h1>
           <p>
             {scholarship
-              ? "Study in Ghana, or find overseas scholarships explicitly open to Ghanaians."
+              ? "Browse Scholsec’s published scholarships and notices. Open awards, unconfirmed deadlines and the closed archive stay separate."
               : "Search source-linked vacancies. Check the details. Apply directly at the original source."}
           </p>
         </section>
@@ -129,6 +129,19 @@ function SearchContent() {
             </h2>
             {scholarship ? (
               <>
+                <label className="field-label" htmlFor="availability">
+                  Scholarship status
+                </label>
+                <select
+                  id="availability"
+                  name="availability"
+                  defaultValue={params.get("availability") || "open"}
+                >
+                  <option value="open">Open for applications</option>
+                  <option value="unconfirmed">Deadline unconfirmed</option>
+                  <option value="closed">Closed archive</option>
+                  <option value="all">All Scholsec notices</option>
+                </select>
                 <label className="field-label" htmlFor="study">
                   Study level
                 </label>
@@ -293,7 +306,7 @@ function SearchContent() {
             <p role="status" className="results-count">
               {loading
                 ? "Loading the Ghana catalogue…"
-                : `${total} current opportunities · Page ${page}`}
+                : `${total} ${scholarship ? "scholarship notices" : "current opportunities"} · Page ${page}`}
             </p>
             {updated ? (
               <p className="filter-note">
@@ -328,6 +341,17 @@ function SearchContent() {
                         {job.description.slice(0, 200)}…
                       </p>
                       <div className="job-tags">
+                        {scholarship && (
+                          <span
+                            className={`tag scholarship-status ${job.listing_status}`}
+                          >
+                            {job.listing_status === "open"
+                              ? "Open for applications"
+                              : job.listing_status === "closed"
+                                ? "Closed · archive"
+                                : "Deadline unconfirmed"}
+                          </span>
+                        )}
                         <span className="tag mint">
                           {scholarship
                             ? job.study_levels
@@ -362,7 +386,11 @@ function SearchContent() {
                       <Link href={`/jobs/${job.id}`} className="btn-primary">
                         View details ↗
                       </Link>
-                      <small>Apply at the original source</small>
+                      <small>
+                        {scholarship && job.listing_status !== "open"
+                          ? "Read the official notice"
+                          : "Apply at the original source"}
+                      </small>
                     </div>
                   </article>
                 ))
@@ -371,9 +399,9 @@ function SearchContent() {
               <div className="empty-state">
                 <h2>No current matches.</h2>
                 <p>
-                  Try fewer filters. We do not substitute unrelated countries or
-                  expired listings. Coverage is growing as more sources pass our
-                  checks.
+                  {scholarship
+                    ? "Try fewer filters or choose All Scholsec notices to include the closed archive and notices without a confirmed deadline."
+                    : "Try fewer filters. We do not substitute unrelated countries or expired listings. Coverage is growing as more sources pass our checks."}
                 </p>
                 <Link
                   href={`/search?category=${category}`}

@@ -76,7 +76,14 @@ export default function Details() {
     <>
       <Header />
       <main id="main-content" className="shell job-detail">
-        <Link href={`/search?${query}`} className="back-link">
+        <Link
+          href={
+            job?.category === "scholarships"
+              ? `/search?category=scholarships&availability=${job.listing_status || "open"}`
+              : `/search?${query}`
+          }
+          className="back-link"
+        >
           ← Back to results
         </Link>
         {message && (
@@ -94,6 +101,17 @@ export default function Details() {
                   {job.company} · {job.location}
                 </p>
                 <div className="job-tags">
+                  {job.category === "scholarships" && (
+                    <span
+                      className={`tag scholarship-status ${job.listing_status}`}
+                    >
+                      {job.listing_status === "open"
+                        ? "Open for applications"
+                        : job.listing_status === "closed"
+                          ? "Closed archive"
+                          : "Deadline unconfirmed"}
+                    </span>
+                  )}
                   {job.remote && <span className="tag mint">Remote</span>}
                   {job.job_type && <span className="tag">{job.job_type}</span>}
                   {job.industry && <span className="tag">{job.industry}</span>}
@@ -106,14 +124,20 @@ export default function Details() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => {
-                    if (signedIn && !recordId) void save();
+                    if (signedIn && !recordId && job.can_apply !== false)
+                      void save();
                   }}
                 >
-                  Apply at source ↗
+                  {job.can_apply === false
+                    ? "Read official notice ↗"
+                    : "Apply at source ↗"}
                 </a>
                 <p>
-                  Read the posting and submit on its original website. No
-                  account required.
+                  {job.listing_status === "closed"
+                    ? "This scholarship has closed. The notice remains available for reference."
+                    : job.listing_status === "unconfirmed"
+                      ? "A current application deadline is not confirmed. Check the official notice for eligibility and availability."
+                      : "Read the posting and submit on its original website. No account required."}
                 </p>
                 {signedIn ? (
                   <>
@@ -143,6 +167,12 @@ export default function Details() {
                 Deadline: {displayDate(job.deadline)} · Last source check:{" "}
                 {displayDate(job.checked_at)}
               </p>
+              {job.category === "scholarships" && (
+                <p>
+                  {job.eligibility_note}. Published by Scholsec. ZagJobSearch is
+                  an independent listing service.
+                </p>
+              )}
               <p>
                 {job.description ||
                   "The source did not provide a full description. Open the original posting for details."}

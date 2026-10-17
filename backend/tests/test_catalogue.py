@@ -149,3 +149,115 @@ class CatalogueTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(c, "supabase", db), patch.object(c, "collect", collector):
             self.assertFalse((await c.refresh())["refreshed"])
         collector.assert_not_awaited()
+
+
+class ScholsecTests(unittest.IsolatedAsyncioTestCase):
+    def notice(
+        self,
+        title="Scholarship for Ghanaian students",
+        deadline="Not specified",
+        body="Ghanaian students may apply. Check eligibility with the Authority.",
+        status="Official notice",
+    ):
+        from bs4 import BeautifulSoup
+
+        return BeautifulSoup(
+            f'<main><h1>{title}</h1><div class="opportunity-meta-card"><span>Deadline</span><strong>{deadline}</strong></div><div class="opportunity-meta-card"><span>Status</span><strong>{status}</strong></div><div class="opportunity-meta-card"><span>Published</span><strong>April 10, 2026</strong></div><div class="opportunity-article-body"><p>{body}</p></div></main>',
+            "html.parser",
+        )
+
+    def test_closed_notice_is_retained_and_cannot_apply(self):
+        j = c.parse_scholarship(
+            self.notice(deadline="September 21, 2026", status="Open"),
+            "https://scholarships.gov.gh/opportunities/algeria",
+        )
+        self.assertEqual(j["listing_status"], "closed")
+        self.assertFalse(j["can_apply"])
+
+    def test_unknown_deadline_never_becomes_open(self):
+        j = c.parse_scholarship(
+            self.notice(status="Open"),
+            "https://scholarships.gov.gh/opportunities/unknown",
+        )
+        self.assertEqual(j["listing_status"], "unconfirmed")
+        self.assertFalse(j["can_apply"])
+
+    def test_body_deadline_and_local_window_are_recognised(self):
+        self.assertEqual(
+            c.scholarship_deadline(
+                {},
+                "Application Deadline All applications must be submitted on or before 26th June 2026.",
+            ).day,
+            26,
+        )
+        self.assertEqual(
+            c.scholarship_deadline(
+                {},
+                "The effective opening date for applications is Friday, April 10 th , 2026 to Friday May 15 th 2026.",
+            ).isoformat(),
+            "2026-05-15T23:59:59+00:00",
+        )
+
+    async def test_all_pages_are_followed_without_external_links(self):
+        from bs4 import BeautifulSoup
+
+        base = "https://scholarships.gov.gh"
+        first = BeautifulSoup(
+            '2 Total notices<a href="/opportunities/one">One</a><a href="/opportunities?page=2">Next</a><a href="https://evil.example/opportunities?page=3">Ignore</a>',
+            "html.parser",
+        )
+        second = BeautifulSoup(
+            '<a href="/opportunities/two">Two</a><a href="/opportunities?page=2">2</a>',
+            "html.parser",
+        )
+
+        async def read(client, url):
+            if url == base + "/opportunities":
+                return first
+            if url == base + "/opportunities?page=2":
+                return second
+            return self.notice()
+
+        fetch = AsyncMock(side_effect=read)
+        with patch.object(c, "html_get", fetch):
+            source, jobs = await c.scholarships(None)
+        self.assertEqual(source, "scholarships-authority")
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual(fetch.await_count, 4)
+
+    def test_open_default_excludes_closed_and_unknown_notices(self):
+        closed = c.parse_scholarship(
+            self.notice(deadline="September 21, 2026"),
+            "https://scholarships.gov.gh/opportunities/closed",
+        )
+        unknown = c.parse_scholarship(
+            self.notice(), "https://scholarships.gov.gh/opportunities/unknown"
+        )
+        rows = [
+            {
+                "payload": j,
+                "first_seen_at": c.NOW().isoformat(),
+                "deadline": j["deadline"],
+            }
+            for j in [closed, unknown]
+        ]
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.execute.return_value.data = (
+            []
+        )
+        with patch.object(c, "active_rows", return_value=rows), patch.object(
+            c, "supabase", db
+        ):
+            default = c.search_catalogue(
+                Request({"type": "http", "query_string": b"category=scholarships"})
+            )
+            all_notices = c.search_catalogue(
+                Request(
+                    {
+                        "type": "http",
+                        "query_string": b"category=scholarships&availability=all",
+                    }
+                )
+            )
+        self.assertEqual(default["total"], 0)
+        self.assertEqual(all_notices["total"], 2)

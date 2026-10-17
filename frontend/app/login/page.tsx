@@ -94,7 +94,7 @@ export default function LoginPage() {
           </form>
 
           {(message || oauthMessage) && (
-            <p className="mt-4 text-sm" style={{ color: status === "success" ? "var(--secondary)" : "#ff6b6b" }}>
+            <p className="mt-4 text-sm" style={{ color: status === "success" ? "var(--secondary)" : "#ce1126" }}>
               {message}
             </p>
           )}
