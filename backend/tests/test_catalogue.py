@@ -127,14 +127,15 @@ class CatalogueTests(unittest.IsolatedAsyncioTestCase):
         job = self.job()
         db = MagicMock()
         db.rpc.return_value.execute.return_value.data = True
-        db.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
+        db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = [
             {"id": "gone", "source_key": "test"},
             {"id": "keep", "source_key": "unavailable"},
+            {"id": "window", "source_key": "glmis"},
         ]
         with patch.object(c, "supabase", db), patch.object(
             c,
             "collect",
-            AsyncMock(return_value=[("test", [job]), ("unavailable", None)]),
+            AsyncMock(return_value=[("test", [job]), ("unavailable", None), ("glmis", [])]),
         ):
             result = await c.refresh()
         self.assertTrue(result["refreshed"])

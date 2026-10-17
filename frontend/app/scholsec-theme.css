@@ -1,4 +1,31 @@
 /* Photo-led Ghana identity, following the layout and typography of scholarships.gov.gh. */
+.sources-hero { position: relative; padding: 90px 0; background: #063f2b; color: white; }
+.sources-hero::before { background-image: linear-gradient(90deg, #063f2bf5, #063f2bb5), url('/images/professionals.jpg'); }
+.sources-hero .portal-eyebrow { color: #f6d94a; font-size: 11px; font-weight: 900; letter-spacing: 2px; }
+.sources-hero h1 { font-size: clamp(35px, 5vw, 62px); line-height: 1.12; margin: 20px 0; max-width: 850px; }
+.sources-hero p:not(.portal-eyebrow) { max-width: 600px; line-height: 1.8; margin: 0 0 26px; }
+.sources-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+.source-card { display: flex; flex-direction: column; padding: 25px; background: white; border: 1px solid #1018201a; border-top: 3px solid #006b3f; border-radius: 6px; transition: transform .2s, box-shadow .2s; min-width: 0; }
+.source-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px #0b251d14; }
+.source-card-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; color: #5f6b68; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; }
+.source-health { display: inline-block; padding: 6px 8px; border-radius: 3px; font-weight: 900; }
+.source-health.checked { color: #006b3f; background: #e7f1eb; }
+.source-health.pending { color: #684e00; background: #fcf5d9; }
+.source-health.external { color: #5f6b68; background: #f2f3f2; }
+.source-card h3 { color: #063f2b; font-size: 20px; line-height: 1.35; margin: 24px 0 8px; overflow-wrap: anywhere; }
+.source-card h3 a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.portal-section .source-card p { font-size: 14px; line-height: 1.7; margin: 0 0 20px; }
+.source-card-bottom { margin-top: auto; padding-top: 16px; border-top: 1px solid #1018201a; color: #5f6b68; font-size: 12px; line-height: 1.5; }
+.sources-explainer { margin-top: 40px; padding: 25px 30px; border-left: 4px solid #f6d94a; background: #f7f8f5; }
+.sources-explainer h3 { color: #063f2b; margin: 0 0 10px; }
+.portal-section .sources-explainer p { margin: 0; font-size: 14px; }
+.sources-more { background: #f7f8f5; }
+.sources-more::before { background-image: linear-gradient(#f7f8f5ee, #f7f8f5f5), url('/images/career-desk.jpg'); }
+.portal-section .sources-updated, .portal-section .sources-independence { font-size: 12px; }
+.sources-independence { margin-top: 30px; }
+@media (max-width: 960px) { .sources-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .sources-grid { grid-template-columns: minmax(0, 1fr); } .sources-hero { padding: 60px 0; } .source-card { padding: 22px; } }
+@media (prefers-reduced-motion: reduce) { .source-card { transition: none; } .source-card:hover { transform: none; } }
 :root {
   --portal-green: #006b3f;
   --portal-dark: #063f2b;

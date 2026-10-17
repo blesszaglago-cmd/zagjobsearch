@@ -311,7 +311,7 @@ function SearchContent() {
             {updated ? (
               <p className="filter-note">
                 Last refresh {displayDate(updated)}. Rechecked automatically
-                each day.
+                each day. <Link href="/sources">See our sources →</Link>
               </p>
             ) : null}
             {warning ? (

@@ -162,7 +162,7 @@ export default function Details() {
               </div>
             </div>
             <section className="detail-description">
-              <h2>About the opportunity</h2>
+              <h2>{job.description_kind === "source_summary" ? "Opportunity summary" : "About the opportunity"}</h2>
               <p>
                 Deadline: {displayDate(job.deadline)} · Last source check:{" "}
                 {displayDate(job.checked_at)}
@@ -177,6 +177,7 @@ export default function Details() {
                 {job.description ||
                   "The source did not provide a full description. Open the original posting for details."}
               </p>
+              {job.description_kind === "source_summary" && <a className="portal-text-link" href={job.source_url || job.url} target="_blank" rel="noopener noreferrer">Read full requirements and application instructions at {job.source} ↗</a>}
             </section>
             {job.salary_min != null && (
               <p>

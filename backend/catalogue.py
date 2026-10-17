@@ -2,16 +2,18 @@
 
 import asyncio, hashlib, html, json, re, logging
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException, Request
 from database.supabase_client import supabase
+import ghana_sources
 
 router = APIRouter()
 NOW = lambda: datetime.now(timezone.utc)
 REGIONS = {
-    "Greater Accra": ["accra", "tema", "ashaiman", "madina", "adenta", "dodowa"],
+    "Greater Accra": ["accra", "tema", "ashaiman", "madina", "adenta", "dodowa", "haatso", "achimota", "spintex", "tesano", "legon", "awketeyman", "akweteyman", "dzorwulu", "dansoman", "tantra hills", "kisseman"],
     "Ashanti": ["kumasi", "obuasi", "ejisu", "konongo"],
     "Western": ["takoradi", "sekondi", "tarkwa", "prestea"],
     "Central": ["cape coast", "winneba", "mankessim", "kasoa"],
@@ -21,7 +23,7 @@ REGIONS = {
     "Upper East": ["bolgatanga", "navrongo", "bawku"],
     "Upper West": ["wa", "lawra"],
     "Bono": ["sunyani", "berekum"],
-    "Bono East": ["techiman", "kintampo"],
+    "Bono East": ["techiman", "kintampo", "atebubu"],
     "Ahafo": ["goaso", "kenyasi"],
     "Western North": ["sefwi", "bibiani"],
     "Oti": ["dambai", "nkwanta"],
@@ -79,6 +81,11 @@ def date(value):
         return result if result.tzinfo else result.replace(tzinfo=timezone.utc)
     except ValueError:
         pass
+    try:
+        result = parsedate_to_datetime(value)
+        return result if result.tzinfo else result.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        pass
     for fmt in [
         "%d %B, %Y",
         "%d %B %Y",
@@ -86,6 +93,7 @@ def date(value):
         "%B %d %Y",
         "%d %b %Y",
         "%b %d, %Y",
+        "%d %b-%Y",
         "%a %b %d %H:%M:%S UTC %Y",
     ]:
         try:
@@ -176,7 +184,7 @@ def make_job(
     industry="",
     check_url=None,
 ):
-    d = deadline or closing(body)
+    d = date(deadline) or closing(body)
     p = date(posted)
     if d and d < NOW():
         return None
@@ -617,26 +625,44 @@ async def mining(client):
     return "anglogold", [x for x in out if x]
 
 
+class PublicSourceClient:
+    """Bound concurrency per host as well as across the complete source refresh."""
+
+    def __init__(self, client):
+        self.client = client
+        self.slots = asyncio.Semaphore(12)
+        self.hosts = {}
+
+    async def get(self, url, **kwargs):
+        host = urlparse(url).hostname
+        limit = self.hosts.setdefault(host, asyncio.Semaphore(3))
+        async with limit, self.slots:
+            return await self.client.get(url, **kwargs)
+
+
 async def collect():
     async with httpx.AsyncClient(
         timeout=12,
         follow_redirects=True,
         headers=HEADERS,
         limits=httpx.Limits(max_connections=12),
-    ) as client:
+    ) as http_client:
+        client = PublicSourceClient(http_client)
         tasks = [
             *(smart(client, b) for b in SMART),
             *(greenhouse(client, b) for b in GREENHOUSE),
             scholarships(client),
             mining(client),
+            *ghana_sources.tasks(client),
         ]
         names = [
             *["smart:" + b for b in SMART],
             *["greenhouse:" + b for b in GREENHOUSE],
             "scholarships-authority",
             "anglogold",
+            *ghana_sources.SOURCE_NAMES,
         ]
-        result = await asyncio.gather(*tasks, return_exceptions=True)
+        result = await asyncio.gather(*(asyncio.wait_for(task, 130) for task in tasks), return_exceptions=True)
         for name, outcome in zip(names, result):
             if isinstance(outcome, Exception):
                 logging.warning(
@@ -648,6 +674,20 @@ async def collect():
             (names[i], None if isinstance(r, Exception) else r[1])
             for i, r in enumerate(result)
         ]
+
+
+def catalogue_rows(columns, fresh=False):
+    """PostgREST caps a response at 1,000 rows; explicitly page larger catalogues."""
+    result, offset = [], 0
+    while True:
+        query = supabase.table("job_catalogue").select(columns).eq("status", "active")
+        if fresh:
+            query = query.gte("last_checked_at", (NOW() - timedelta(hours=48)).isoformat())
+        rows = query.order("id").range(offset, offset + 499).execute().data
+        result.extend(rows)
+        if len(rows) < 500:
+            return result
+        offset += 500
 
 
 async def refresh():
@@ -680,20 +720,16 @@ async def refresh():
             )
         summary.append({"source": source, "state": "ok", "accepted": len(jobs)})
     if records:
-        supabase.table("job_catalogue").upsert(records, on_conflict="id").execute()
-    old = (
-        supabase.table("job_catalogue")
-        .select("id,source_key")
-        .eq("status", "active")
-        .execute()
-        .data
-    )
+        for offset in range(0, len(records), 200):
+            supabase.table("job_catalogue").upsert(records[offset:offset + 200], on_conflict="id").execute()
+    old = catalogue_rows("id,source_key")
     closed = [
-        r["id"] for r in old if r["source_key"] in successful and r["id"] not in ids
+        r["id"] for r in old
+        if r["source_key"] in successful - ghana_sources.WINDOWED_SOURCES and r["id"] not in ids
     ]
-    if closed:
+    for offset in range(0, len(closed), 200):
         supabase.table("job_catalogue").update({"status": "closed"}).in_(
-            "id", closed
+            "id", closed[offset:offset + 200]
         ).execute()
     supabase.table("catalogue_refresh").update(
         {"completed_at": NOW().isoformat(), "summary": summary}
@@ -713,17 +749,36 @@ async def refresh_route():
 
 
 def active_rows():
-    cutoff = (NOW() - timedelta(hours=48)).isoformat()
-    return (
-        supabase.table("job_catalogue")
-        .select("payload,first_seen_at,deadline")
-        .eq("status", "active")
-        .gte("last_checked_at", cutoff)
-        .order("last_checked_at", desc=True)
-        .limit(1000)
-        .execute()
-        .data
-    )
+    return catalogue_rows("payload,first_seen_at,deadline", fresh=True)
+
+
+def job_identity(job):
+    company = re.sub(r"\W", "", job["company"]).lower()
+    title = re.sub(r"\W", "", job["title"]).lower()
+    location = re.sub(r"\bghana\b", "", job["location"], flags=re.I)
+    return company, title, re.sub(r"\W", "", location).lower()
+
+
+@router.get("/catalogue/sources")
+def catalogue_sources():
+    rows = supabase.table("catalogue_refresh").select("completed_at,summary").eq("id", 1).execute().data
+    state = rows[0] if rows else {}
+    health = {x["source"]: x for x in state.get("summary", [])}
+    registry = dict(ghana_sources.SOURCE_INFO)
+    for board in SMART:
+        registry["smart:" + board] = (board.replace("Deloitte6", "Deloitte").replace("AccorHotel", "Accor").replace("AECOM2", "AECOM").replace("StandardBankGroup", "Standard Bank").replace("MastercardFoundation", "Mastercard Foundation"), f"https://careers.smartrecruiters.com/{board}", "Direct employer", "Public employer board. Only explicit Ghana locations qualify.")
+    for board, name in GREENHOUSE.items():
+        registry["greenhouse:" + board] = (name, f"https://job-boards.greenhouse.io/{board}", "Direct employer", "Public employer board. Remote roles must explicitly accept applicants in Ghana.")
+    registry["anglogold"] = ("AngloGold Ashanti", "https://careers.anglogoldashanti.com/", "Direct employer", "Public employer board, checked for Ghana location and closing dates.")
+    registry["scholarships-authority"] = ("Ghana Scholarships Authority", "https://scholarships.gov.gh/opportunities", "Scholarships", "Official notices. Open, unconfirmed and archived notices have separate views.")
+    checked = date(state.get("completed_at"))
+    current = bool(checked and checked >= NOW() - timedelta(hours=48))
+    imported = []
+    for key, (name, url, kind, note) in registry.items():
+        status = health.get(key, {})
+        imported.append({"key": key, "name": name, "url": url, "kind": kind, "note": note, "state": status.get("state", "not_checked") if current else "awaiting_refresh", "accepted": status.get("accepted", 0) if current else 0})
+    external = [{"name": name, "url": url, "kind": kind, "note": note} for name, url, kind, note in ghana_sources.EXTERNAL_SOURCES]
+    return {"updated_at": state.get("completed_at"), "imported": imported, "external": external}
 
 
 @router.get("/catalogue")
@@ -738,6 +793,8 @@ def search_catalogue(request: Request):
     except ValueError:
         page = 1
     rows = active_rows()
+    # When a board repeats an employer's posting, show the employer record first.
+    rows.sort(key=lambda row: row["payload"].get("description_kind") == "source_summary")
     jobs = []
     seen = set()
     for row in rows:
@@ -790,9 +847,7 @@ def search_catalogue(request: Request):
         identity = (
             j["id"]
             if category == "scholarships"
-            else re.sub(
-                r"\W", "", j["company"] + " " + j["title"] + " " + j["location"]
-            ).lower()
+            else job_identity(j)
         )
         if identity in seen:
             continue
@@ -862,6 +917,11 @@ async def catalogue_details(job_id: str):
         "api.smartrecruiters.com",
         "boards-api.greenhouse.io",
         "careers.anglogoldashanti.com",
+        "www.ghanacurrentjobs.com",
+        "hiregh.com",
+        "www.glmis.gov.gh",
+        "jobs.newmont.com",
+        "telecel.zohorecruit.com",
     ]:
         try:
             async with httpx.AsyncClient(
@@ -878,7 +938,7 @@ async def catalogue_details(job_id: str):
                     503,
                     "The source could not confirm this opportunity. Please try again later.",
                 )
-            if host == "careers.anglogoldashanti.com":
+            if host in ["careers.anglogoldashanti.com", "www.ghanacurrentjobs.com", "hiregh.com", "www.glmis.gov.gh"]:
                 body = text(r.text)
                 soup = BeautifulSoup(r.text, "html.parser")
                 expiry = soup.select_one("[itemprop=validThrough]")
@@ -895,10 +955,29 @@ async def catalogue_details(job_id: str):
                         "id", job_id
                     ).execute()
                     raise HTTPException(410, "The source closed this opportunity.")
+                if host in ["www.ghanacurrentjobs.com", "www.glmis.gov.gh"]:
+                    parser = ghana_sources.parse_current_jobs if host == "www.ghanacurrentjobs.com" else ghana_sources.parse_glmis
+                    fresh = parser(soup, check)
+                    if not fresh:
+                        raise HTTPException(503, "The original posting needs a fresh eligibility check. Please try another current opportunity.")
+                    j.update({k: v for k, v in fresh.items() if k not in ["id", "first_seen_at"]})
+            if host == "jobs.newmont.com":
+                fresh = ghana_sources.parse_newmont(BeautifulSoup(r.text, "html.parser"), check)
+                if not fresh:
+                    supabase.table("job_catalogue").update({"status": "closed"}).eq("id", job_id).execute()
+                    raise HTTPException(410, "The employer no longer lists this Ghana opportunity as open.")
+            if host == "telecel.zohorecruit.com":
+                rows = ghana_sources.telecel_rows(BeautifulSoup(r.text, "html.parser"))
+                fresh = next((ghana_sources.parse_telecel(row) for row in rows if str(row.get("id")) == j.get("employer_job_id")), None)
+                if not fresh:
+                    supabase.table("job_catalogue").update({"status": "closed"}).eq("id", job_id).execute()
+                    raise HTTPException(410, "The employer no longer lists this Ghana opportunity as open.")
         except httpx.HTTPError:
             raise HTTPException(
                 503,
                 "The source could not confirm this opportunity. Please try again later.",
             )
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(503, "The source format changed and this posting could not be confirmed.")
     j.pop("check_url", None)
     return j
