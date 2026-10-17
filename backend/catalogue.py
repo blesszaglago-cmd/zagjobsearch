@@ -83,6 +83,7 @@ def date(value):
         "%d %B, %Y",
         "%d %B %Y",
         "%B %d, %Y",
+        "%B %d %Y",
         "%d %b %Y",
         "%b %d, %Y",
         "%a %b %d %H:%M:%S UTC %Y",
@@ -337,98 +338,195 @@ async def html_get(client, url):
     return BeautifulSoup(r.text, "html.parser")
 
 
-async def scholarships(client):
-    base = "https://scholarships.gov.gh"
-    soup = await html_get(client, base + "/opportunities")
-    links = list(
-        dict.fromkeys(
-            urljoin(base, a["href"])
-            for a in soup.select("a[href]")
-            if "/opportunities/" in a["href"]
+def scholarship_deadline(meta, body):
+    explicit = date(meta.get("deadline"))
+    if explicit:
+        return explicit
+    body = re.sub(r"(\d)\s*(?:st|nd|rd|th)\b", r"\1", body, flags=re.I)
+    body = re.sub(r"\s+,", ",", body)
+    token = r"(?:\d{1,2}\s+[A-Za-z]+,?\s+\d{4}|[A-Za-z]+\s+\d{1,2},?\s+\d{4})"
+    contexts = re.findall(
+        r"(?:deadline|closing date|not later than|no later than|on or before|latest by|application before).{0,180}",
+        body,
+        re.I,
+    )
+    # Explicit opening-to-closing window in the local tertiary notice.
+    contexts += re.findall(r"opening date.{0,160}?\bto\b(.{0,80})", body, re.I)
+    dates = [
+        parsed
+        for context in contexts
+        for value in re.findall(token, context)
+        if (parsed := date(value))
+    ]
+    return min(dates) if dates else None
+
+
+def scholarship_state(job):
+    deadline = date(job.get("deadline"))
+    if (
+        job.get("source_status", "").lower() == "closed"
+        or deadline
+        and deadline < NOW()
+    ):
+        return "closed"
+    return "open" if deadline else "unconfirmed"
+
+
+def parse_scholarship(soup, url):
+    main = soup.select_one("main") or soup
+    title_node = main.find("h1")
+    article = main.select_one(".opportunity-article-body")
+    if not title_node or not article:
+        raise ValueError("Scholarship detail format changed")
+    title = title_node.get_text(" ", strip=True)
+    body = article.get_text(" ", strip=True)
+    meta = {}
+    for card in main.select(".opportunity-meta-card"):
+        label, value = card.find("span"), card.find("strong")
+        if label and value:
+            meta[label.get_text(" ", strip=True).lower()] = value.get_text(
+                " ", strip=True
+            )
+    deadline = scholarship_deadline(meta, body)
+    published = date(meta.get("published"))
+    combined = title + " " + body
+    local = bool(
+        re.search(
+            r"local tertiary|local scholarship|institutions in Ghana|universities in Ghana|Ghanaian universities|tenable in Ghana|Fanaka|PWASI",
+            combined,
+            re.I,
         )
     )
-    if not links or len(links) > 50:
-        raise ValueError("Scholarship index needs a new adapter")
-
-    async def one(u):
-        s = await html_get(client, u)
-        main = s.select_one("main") or s
-        for el in main.select("script,style,nav,footer,header"):
-            el.decompose()
-        heading = main.find("h1")
-        title = heading.get_text(" ", strip=True) if heading else ""
-        article = main.select_one("#opportunity-details")
-        meta = main.select_one(".opportunity-meta-grid")
-        body = (
-            (meta.get_text(" ", strip=True) if meta else "")
-            + " "
-            + (article.get_text(" ", strip=True) if article else "")
+    abroad = bool(
+        re.search(
+            r"Saudi Arabia|Algeria|Serbia|Hungary|China|Chinese|Japan|Turkey|United Kingdom|London|Geneva|United States|Germany|France|Canada|Australia|Australian|Spain|Spanish|South Korea|India|Morocco|Russia|Mauritius|Thai|overseas|abroad",
+            combined,
+            re.I,
         )
-        body = body.split("Before applying")[0].split("Latest notices")[0].strip()
-        deadline = closing(body)
-        # Government notices can contain old openings. Require a current explicit deadline.
-        if (
-            not deadline
-            or deadline < NOW()
-            or not re.search(
-                r"Ghanaian|citizens of Ghana|nationals of Ghana", body, re.I
+    )
+    # Prefer the award's stated level, excluding sentences about prior qualifications.
+    parts = [p.get_text(" ", strip=True) for p in article.select("p,li,h2,h3,h4,td")]
+    offered = (
+        title
+        + " "
+        + " ".join(
+            p
+            for p in parts
+            if not re.search(
+                r"must (?:have|hold|possess)|hold at least|should (?:have|hold)|minimum admission|Bachelor or a Master degree",
+                p,
+                re.I,
             )
-        ):
-            return None
-        job = make_job(
-            "scholarships-authority",
-            u,
-            title,
-            "Ghana Scholarships Authority",
-            "See official notice",
-            body,
-            u,
-            deadline=deadline,
         )
-        if not job:
-            return None
-        job.update(
-            category="scholarships",
-            job_type="scholarship",
-            study_levels=[
-                key
-                for key, pat in [
-                    ("undergraduate", r"undergraduate|bachelor"),
-                    ("masters", r"master(?! of philosophy)"),
-                    ("mphil", r"m\.?phil|master of philosophy"),
-                    ("phd", r"ph\.?d|doctorate|doctoral"),
-                ]
-                if re.search(pat, body, re.I)
-            ],
-            study_destination=(
-                "ghana"
-                if re.search(
-                    r"(?:institutions|universities|study|studies) in Ghana|local tertiary",
-                    title + " " + body,
-                    re.I,
-                )
-                else (
-                    "abroad"
-                    if re.search(
-                        r"Saudi Arabia|Algeria|Serbia|Hungary|China|Japan|Turkey|United Kingdom|United States|Germany|France|Canada|Australia|South Korea|India|Morocco|Russia|overseas|abroad",
-                        title + " " + body,
-                        re.I,
-                    )
-                    else "unspecified"
-                )
-            ),
-            funding=(
-                "full"
-                if re.search("fully funded|full scholarship", body, re.I)
+    )
+    levels = [
+        key
+        for key, pattern in [
+            ("undergraduate", r"undergraduate|bachelor.{0,20}program"),
+            ("masters", r"master(?! of philosophy)"),
+            ("mphil", r"m\.?phil|master of philosophy"),
+            ("phd", r"ph\.?d|doctorate|doctoral"),
+        ]
+        if re.search(pattern, offered, re.I)
+    ]
+    job = {
+        "id": hashlib.sha256(("scholarships-authority:" + url).encode()).hexdigest()[
+            :32
+        ],
+        "source_key": "scholarships-authority",
+        "title": title,
+        "company": "Ghana Scholarships Authority (Scholsec)",
+        "source": "Ghana Scholarships Authority",
+        "location": (
+            "Study in Ghana"
+            if local
+            else "Study abroad" if abroad else "See official notice"
+        ),
+        "regions": [],
+        "description": body[:24000],
+        "url": url,
+        "source_url": url,
+        "created": published.isoformat() if published else None,
+        "date_kind": "published" if published else "not_provided",
+        "deadline": deadline.isoformat() if deadline else None,
+        "source_status": meta.get("status", ""),
+        "job_type": "scholarship",
+        "experience": "unspecified",
+        "industry": "",
+        "remote": False,
+        "category": "scholarships",
+        "checked_at": NOW().isoformat(),
+        "check_url": None,
+        "study_levels": levels,
+        "study_destination": (
+            "ghana" if local else "abroad" if abroad else "unspecified"
+        ),
+        "funding": (
+            "full"
+            if re.search(r"fully funded|full scholarship", body, re.I)
+            else (
+                "partial"
+                if re.search(r"partial scholarship|partially funded", body, re.I)
                 else "unspecified"
-            ),
-        )
-        return job
+            )
+        ),
+        "eligibility_note": (
+            "Ghanaian applicants mentioned in the notice"
+            if re.search(r"Ghanaian|citizens of Ghana|nationals of Ghana", body, re.I)
+            else "Check the notice for nationality and admission requirements"
+        ),
+        "verification": "Official Scholsec notice checked",
+    }
+    job["listing_status"] = scholarship_state(job)
+    job["can_apply"] = job["listing_status"] == "open"
+    return job
 
-    out = await asyncio.gather(*(one(u) for u in links), return_exceptions=True)
-    if any(isinstance(x, Exception) for x in out):
+
+async def scholarships(client):
+    base = "https://scholarships.gov.gh"
+    pending = [base + "/opportunities"]
+    visited, links = set(), set()
+    expected = None
+    while pending:
+        page = pending.pop(0)
+        if page in visited:
+            continue
+        if len(visited) >= 50:
+            raise ValueError(
+                "Scholarship pagination limit reached; incomplete refresh withheld"
+            )
+        visited.add(page)
+        soup = await html_get(client, page)
+        if expected is None:
+            match = re.search(
+                r"(\d+)\s+Total notices", soup.get_text(" ", strip=True), re.I
+            )
+            expected = int(match[1]) if match else None
+        for anchor in soup.select("a[href]"):
+            url = urljoin(base, anchor["href"])
+            parsed = urlparse(url)
+            if parsed.hostname != "scholarships.gov.gh":
+                continue
+            if parsed.path.startswith("/opportunities/"):
+                links.add(url.split("?")[0].split("#")[0])
+            elif (
+                parsed.path == "/opportunities"
+                and re.fullmatch(r"page=\d+", parsed.query)
+                and url not in visited
+            ):
+                pending.append(url)
+    if not links or expected is not None and len(links) != expected:
+        raise ValueError("Scholarship index is incomplete")
+
+    async def one(url):
+        return parse_scholarship(await html_get(client, url), url)
+
+    results = await asyncio.gather(
+        *(one(url) for url in sorted(links)), return_exceptions=True
+    )
+    if any(isinstance(result, Exception) for result in results):
         raise ValueError("Incomplete scholarship source check")
-    return "scholarships-authority", [x for x in out if x]
+    return "scholarships-authority", results
 
 
 async def mining(client):
@@ -645,7 +743,15 @@ def search_catalogue(request: Request):
     for row in rows:
         j = row["payload"]
         j["first_seen_at"] = row["first_seen_at"]
-        if row["deadline"] and date(row["deadline"]) < NOW():
+        if category == "scholarships":
+            j["listing_status"] = scholarship_state(j)
+            j["can_apply"] = j["listing_status"] == "open"
+            availability = p.get("availability", "open")
+            if availability not in ["all", "open", "unconfirmed", "closed"]:
+                raise HTTPException(400, "Choose a scholarship status.")
+            if availability != "all" and j["listing_status"] != availability:
+                continue
+        elif row["deadline"] and date(row["deadline"]) < NOW():
             continue
         if j.get("category") != category:
             continue
@@ -681,9 +787,13 @@ def search_catalogue(request: Request):
             ).lower()
         ):
             continue
-        identity = re.sub(
-            r"\W", "", j["company"] + " " + j["title"] + " " + j["location"]
-        ).lower()
+        identity = (
+            j["id"]
+            if category == "scholarships"
+            else re.sub(
+                r"\W", "", j["company"] + " " + j["title"] + " " + j["location"]
+            ).lower()
+        )
         if identity in seen:
             continue
         seen.add(identity)
@@ -727,7 +837,16 @@ async def catalogue_details(job_id: str):
     row = rows[0]
     j = row["payload"]
     j["first_seen_at"] = row["first_seen_at"]
-    if row["status"] != "active" or row["deadline"] and date(row["deadline"]) < NOW():
+    is_scholarship = j.get("category") == "scholarships"
+    if is_scholarship:
+        j["listing_status"] = scholarship_state(j)
+        j["can_apply"] = j["listing_status"] == "open"
+    if (
+        row["status"] != "active"
+        or not is_scholarship
+        and row["deadline"]
+        and date(row["deadline"]) < NOW()
+    ):
         raise HTTPException(
             410,
             "Applications for this opportunity have closed. Your saved application history is unchanged.",
