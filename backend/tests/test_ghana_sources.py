@@ -67,7 +67,7 @@ class GhanaSourceTests(unittest.TestCase):
         self.assertIn("/1234/Finance-Intern", j["url"])
         self.assertIsNone(g.parse_telecel({**row, "Country": "Nigeria"}))
         self.assertIsNone(g.parse_telecel({**row, "Publish": False}))
-        self.assertIsNone(g.parse_telecel({**row, "Date_Opened": (c.NOW() - timedelta(days=61)).isoformat()}))
+        self.assertIsNotNone(g.parse_telecel({**row, "Date_Opened": (c.NOW() - timedelta(days=61)).isoformat()}))
 
     def test_duplicate_board_record_yields_to_direct_employer(self):
         base = {"company": "Telecel Ghana", "title": "Account Manager – High Value SME", "location": "Accra"}

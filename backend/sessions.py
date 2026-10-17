@@ -20,8 +20,8 @@ def signing_key():
 def encode(data):
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
-def issue_session(user_id):
-    payload = encode(json.dumps({"sub": str(user_id), "exp": int(time.time()) + 43200, "aud": "zagjobsearch"}).encode())
+def issue_session(user_id, session_version=1):
+    payload = encode(json.dumps({"sub": str(user_id), "exp": int(time.time()) + 43200, "aud": "zagjobsearch", "v": session_version, "iat": int(time.time())}).encode())
     signature = encode(hmac.new(signing_key(), payload.encode(), hashlib.sha256).digest())
     return f"{payload}.{signature}"
 
@@ -41,4 +41,15 @@ def verify_session(token):
 def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     if not credentials:
         raise HTTPException(401, "Log in to use this feature.")
-    return verify_session(credentials.credentials)
+    user_id = verify_session(credentials.credentials)
+    from database.supabase_client import supabase
+    rows = supabase.table('profiles').select('id,session_version').eq('id', user_id).limit(1).execute().data
+    data = session_payload(credentials.credentials)
+    if not rows or rows[0].get('session_version', 1) != data.get('v', 1):
+        raise HTTPException(401, 'This session has ended. Please log in again.')
+    return user_id
+
+
+def session_payload(token):
+    payload = token.split('.')[0]
+    return json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)))

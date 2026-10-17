@@ -1,212 +1,194 @@
-"use client";
-import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Job } from "@/lib/jobs";
-import { displayDate } from "@/lib/ghana";
-import { accountRequest, blankApplication } from "@/lib/workspace";
-export default function Details() {
-  const { id } = useParams<{ id: string }>(),
-    params = useSearchParams();
-  const [job, setJob] = useState<Job | null>(null),
-    [message, setMessage] = useState(""),
-    [signedIn, setSignedIn] = useState(false),
-    [busy, setBusy] = useState(false),
-    [recordId, setRecordId] = useState("");
-  const query = params.toString();
-  useEffect(() => {
-    const c = new AbortController();
-    fetch(`/api/jobs/${encodeURIComponent(id)}?${query}`, { signal: c.signal })
-      .then(async (r) => {
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.detail);
-        if (!c.signal.aborted) setJob(d);
-      })
-      .catch((e) => {
-        if (!c.signal.aborted) setMessage(e.message);
-      });
-    accountRequest("me")
-      .then(() => {
-        if (!c.signal.aborted) setSignedIn(true);
-      })
-      .catch(() => {});
-    return () => c.abort();
-  }, [id, query]);
-  async function save() {
-    if (!job) return;
-    setBusy(true);
-    try {
-      const deadline = job.deadline
-        ? typeof job.deadline === "number"
-          ? new Date(job.deadline * 1000).toISOString().slice(0, 10)
-          : String(job.deadline).slice(0, 10)
-        : null;
-      const d = await accountRequest("applications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...blankApplication,
-          job_title: job.title,
-          company_name: job.company || "Company not supplied",
-          location: job.location,
-          source_url: job.url,
-          source: job.source,
-          deadline,
-          salary_min: job.salary_min ?? null,
-          salary_max: job.salary_max ?? null,
-          salary_currency: job.salary_currency || "",
-          salary_period: job.salary_period || "",
-        }),
-      });
-      setRecordId(d.id);
-      setMessage(
-        d.status === "started"
-          ? "Saved as Started. Confirm Applied only after submitting on the source website."
-          : "This role is already in your tracker. Open your tracker to review its status.",
-      );
-    } catch (e) {
-      setMessage((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+import JobActions from "@/components/JobActions";
+import { getJob } from "@/lib/jobs-server";
+import { displayDate, experienceLevels, studyLevels } from "@/lib/ghana";
+import { jobSchema } from "@/lib/job-metadata";
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const job = await getJob(id);
+  if (!job)
+    return {
+      title: "Opportunity no longer available",
+      robots: { index: false, follow: true },
+    };
+  const title = `${job.title} at ${job.company}`;
+  const description = `${job.title} in ${job.location}. ${job.description.slice(0, 125)}`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/jobs/${id}` },
+    robots: { index: true, follow: true },
+    openGraph: { title, description, url: `/jobs/${id}` },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
+export default async function Details({ params, searchParams }: Props) {
+  const { id } = await params;
+  const [job, p] = await Promise.all([getJob(id), searchParams]);
+  if (!job) notFound();
+  const from =
+    typeof p.from === "string" && /^\/search(?:\?|$)/.test(p.from)
+      ? p.from
+      : `/search?category=${job.category || "jobs"}`;
+  const schema = jobSchema(job);
+  const action = {
+    id: job.id,
+    title: job.title,
+    company: job.company,
+    location: job.location,
+    url: job.url,
+    source: job.source,
+    deadline: job.deadline,
+    salary_min: job.salary_min,
+    salary_max: job.salary_max,
+    salary_currency: job.salary_currency,
+    salary_period: job.salary_period,
+    can_apply: job.can_apply,
+    category: job.category,
+  };
   return (
     <>
       <Header />
       <main id="main-content" className="shell job-detail">
-        <Link
-          href={
-            job?.category === "scholarships"
-              ? `/search?category=scholarships&availability=${job.listing_status || "open"}`
-              : `/search?${query}`
-          }
-          className="back-link"
-        >
-          ← Back to results
+        <Link href={from} className="back-link">
+          ← Back to your results
         </Link>
-        {message && (
-          <p role="status" className="source-warning">
-            {message}
-          </p>
+        {schema && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(schema).replace(/</g, "\\u003c"),
+            }}
+          />
         )}
-        {job ? (
-          <>
-            <div className="detail-heading">
-              <div>
-                <p className="eyebrow">{job.source}</p>
-                <h1>{job.title}</h1>
-                <p>
-                  {job.company} · {job.location}
-                </p>
-                <div className="job-tags">
-                  {job.category === "scholarships" && (
-                    <span
-                      className={`tag scholarship-status ${job.listing_status}`}
-                    >
-                      {job.listing_status === "open"
-                        ? "Open for applications"
-                        : job.listing_status === "closed"
-                          ? "Closed archive"
-                          : "Deadline unconfirmed"}
-                    </span>
-                  )}
-                  {job.remote && <span className="tag mint">Remote</span>}
-                  {job.job_type && <span className="tag">{job.job_type}</span>}
-                  {job.industry && <span className="tag">{job.industry}</span>}
-                </div>
-              </div>
-              <div className="detail-actions">
-                <a
-                  className="btn-primary"
-                  href={job.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => {
-                    if (signedIn && !recordId && job.can_apply !== false)
-                      void save();
-                  }}
-                >
-                  {job.can_apply === false
-                    ? "Read official notice ↗"
-                    : "Apply at source ↗"}
-                </a>
-                <p>
-                  {job.listing_status === "closed"
-                    ? "This scholarship has closed. The notice remains available for reference."
-                    : job.listing_status === "unconfirmed"
-                      ? "A current application deadline is not confirmed. Check the official notice for eligibility and availability."
-                      : "Read the posting and submit on its original website. No account required."}
-                </p>
-                {signedIn ? (
-                  <>
-                    <button
-                      disabled={busy || Boolean(recordId)}
-                      onClick={save}
-                      className="btn-outline"
-                    >
-                      {recordId ? "Saved to tracker" : "Save to tracker"}
-                    </button>
-                    {recordId && (
-                      <Link href="/tracker" className="text-action">
-                        Confirm Applied in your tracker →
-                      </Link>
-                    )}
-                  </>
-                ) : (
-                  <Link href="/signup" className="text-action">
-                    Create an account for application tracking →
-                  </Link>
-                )}
-              </div>
-            </div>
-            <section className="detail-description">
-              <h2>{job.description_kind === "source_summary" ? "Opportunity summary" : "About the opportunity"}</h2>
-              <p>
-                Deadline: {displayDate(job.deadline)} · Last source check:{" "}
-                {displayDate(job.checked_at)}
-              </p>
+        <div className="detail-heading">
+          <div>
+            <p className="eyebrow">{job.source}</p>
+            <h1>{job.title}</h1>
+            <p>
+              {job.company} · {job.location}
+            </p>
+            <div className="job-tags">
+              {job.remote && <span className="tag">Remote from Ghana</span>}
+              <span className="tag">
+                {job.job_type === "unspecified"
+                  ? "Employment type not stated"
+                  : job.job_type}
+              </span>
               {job.category === "scholarships" && (
-                <p>
-                  {job.eligibility_note}. Published by Scholsec. jobs.ac.ghana is
-                  an independent listing service.
-                </p>
+                <span className="tag">
+                  {job.listing_status === "open"
+                    ? "Open for applications"
+                    : job.listing_status === "closed"
+                      ? "Closed archive"
+                      : "Deadline unconfirmed"}
+                </span>
               )}
-              <p>
-                {job.description ||
-                  "The source did not provide a full description. Open the original posting for details."}
-              </p>
-              {job.description_kind === "source_summary" && <a className="portal-text-link" href={job.source_url || job.url} target="_blank" rel="noopener noreferrer">Read full requirements and application instructions at {job.source} ↗</a>}
-            </section>
-            {job.salary_min != null && (
-              <p>
-                Listed salary: {job.salary_currency || "Currency not supplied"}{" "}
-                {Number(job.salary_min).toLocaleString()}
-                {job.salary_max != null
-                  ? ` to ${Number(job.salary_max).toLocaleString()}`
-                  : ""}{" "}
-                {job.salary_period || ""}
-              </p>
-            )}
-            <p className="field-help">
-              Check eligibility, salary units and the deadline on the original
-              posting.{" "}
+            </div>
+          </div>
+          <JobActions job={action} />
+        </div>
+        <dl className="job-facts">
+          <div>
+            <dt>Application deadline</dt>
+            <dd>{displayDate(job.deadline)}</dd>
+          </div>
+          <div>
+            <dt>Last source check</dt>
+            <dd>{displayDate(job.checked_at)}</dd>
+          </div>
+          {job.category !== "scholarships" && (
+            <div>
+              <dt>Experience</dt>
+              <dd>
+                {experienceLevels.find(([v]) => v === job.experience)?.[1] ||
+                  "Level not stated"}
+                {job.experience_years_min != null
+                  ? ` · ${job.experience_years_min}${job.experience_years_max ? `–${job.experience_years_max}` : "+"} years requested`
+                  : ""}
+              </dd>
+            </div>
+          )}
+          {job.category === "scholarships" && (
+            <div>
+              <dt>Study levels</dt>
+              <dd>
+                {job.study_levels
+                  ?.map((v) => studyLevels.find(([k]) => k === v)?.[1] || v)
+                  .join(", ") || "See official notice"}
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt>Listed salary</dt>
+            <dd>
+              {job.salary_min != null || job.salary_max != null
+                ? `${job.salary_currency || "Currency not stated"} ${job.salary_min?.toLocaleString() || ""}${job.salary_max != null ? ` to ${job.salary_max.toLocaleString()}` : ""}${job.salary_period ? ` per ${job.salary_period}` : " · period not stated"}`
+                : "Not stated by the source"}
+            </dd>
+          </div>
+        </dl>
+        <section className="detail-description">
+          <h2>
+            {job.description_kind === "source_summary"
+              ? "Opportunity summary"
+              : "About the opportunity"}
+          </h2>
+          {job.category === "scholarships" && (
+            <p>
+              {job.eligibility_note}. Published by the Ghana Scholarships
+              Authority. This platform is independent.
+            </p>
+          )}
+          <p className="job-description-copy">{job.description}</p>
+          {job.description_kind === "source_summary" && (
+            <p>
               <a
+                className="portal-text-link"
                 href={job.source_url || job.url}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Source: {job.source} ↗
+                Read the full requirements and instructions at {job.source} ↗
               </a>
             </p>
-          </>
-        ) : !message ? (
-          <p>Loading the full posting…</p>
-        ) : (
-          <Link href="/search" className="btn-outline">
-            Find current opportunities
-          </Link>
+          )}
+          {job.search_terms && job.search_terms.length > 0 && (
+            <p className="field-help">
+              Mentioned by the source: {job.search_terms.join(", ")}.
+            </p>
+          )}
+        </section>
+        <p className="field-help">
+          Confirm requirements and availability on the original posting.
+          Publication at the last check does not verify every employer claim.{" "}
+          <a
+            href={job.source_url || job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View source ↗
+          </a>
+        </p>
+        {job.source_urls && job.source_urls.length > 1 && (
+          <details>
+            <summary>Other matching source notices</summary>
+            {job.source_urls.map((url) => (
+              <p key={url}>
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  {new URL(url).hostname} ↗
+                </a>
+              </p>
+            ))}
+          </details>
         )}
       </main>
       <Footer />

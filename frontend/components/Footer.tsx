@@ -7,8 +7,9 @@ export default function Footer() {
         <div>
           <Logo />
           <p>
-            Connecting your ambition with the next opportunity. Jobs,
-            internships and scholarships, with Ghana at the centre.
+            Website: zagjobsearch.vercel.app. Connecting your ambition with the
+            next opportunity. Jobs, internships and scholarships, with Ghana at
+            the centre.
           </p>
         </div>
         <div>
@@ -27,6 +28,9 @@ export default function Footer() {
           <h2>Your next step</h2>
           <nav aria-label="Footer account and policies">
             <Link href="/tracker">Application tracker</Link>
+            <Link href="/saved-searches">Saved searches</Link>
+            <Link href="/about">About this platform</Link>
+            <Link href="/sponsor">Employer & sponsorship enquiries</Link>
             <Link href="/signup">Create an account</Link>
             <Link href="/privacy">Privacy policy</Link>
             <Link href="/terms">Terms of use</Link>

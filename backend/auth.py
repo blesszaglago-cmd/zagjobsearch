@@ -1,58 +1,61 @@
-"""
-auth.py
-
-Authentication logic for jobs.ac.ghana.
-Handles signup validation, password hashing, and user creation in Supabase.
-"""
+"""Password authentication with versioned hashes and verified provider identities."""
 
 import hashlib
 import secrets
 import hmac
-from sessions import issue_session
 from datetime import date
-from pydantic import BaseModel, EmailStr, Field, field_validator
-
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from fastapi import HTTPException
 from database.supabase_client import supabase
+from sessions import issue_session
+
+ITERATIONS = 600_000
 
 
 class SignupRequest(BaseModel):
-    """Request model for user signup."""
-
-    full_name: str = Field(..., min_length=2, max_length=100)
+    full_name: str = Field(min_length=2, max_length=100)
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
     confirm_password: str
-    date_of_birth: date
-    country: str = Field(..., min_length=2, max_length=2)
+    date_of_birth: date | None = None
+    age_confirmed: bool = False
+    country: str = Field(default="GH", min_length=2, max_length=2)
     accepted_terms: bool
 
-    @field_validator("confirm_password")
+    @field_validator("email")
     @classmethod
-    def passwords_match(cls, v, info):
-        if "password" in info.data and v != info.data["password"]:
+    def normalise_email(cls, value):
+        return str(value).casefold()
+
+    @field_validator("full_name", mode="before")
+    @classmethod
+    def clean_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def valid_account(self):
+        if self.password != self.confirm_password:
             raise ValueError("Passwords do not match")
-        return v
-
-    @field_validator("date_of_birth")
-    @classmethod
-    def age_gate(cls, v):
-        """COPPA age gate: reject users under 13."""
-        today = date.today()
-        age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
-        if age < 13:
-            raise ValueError("You must be at least 13 years old to use jobs.ac.ghana")
-        return v
-
-    @field_validator("accepted_terms")
-    @classmethod
-    def terms_accepted(cls, v):
-        if not v:
+        if not self.accepted_terms:
             raise ValueError("You must accept the Terms of Service")
-        return v
+        if self.date_of_birth:
+            today = date.today()
+            age = (
+                today.year
+                - self.date_of_birth.year
+                - (
+                    (today.month, today.day)
+                    < (self.date_of_birth.month, self.date_of_birth.day)
+                )
+            )
+            if age < 13:
+                raise ValueError("You must be at least 13 years old")
+        elif not self.age_confirmed:
+            raise ValueError("Confirm that you are at least 13 years old")
+        return self
 
 
 class SignupResponse(BaseModel):
-    """Response model for successful signup."""
     user_id: str
     email: str
     full_name: str
@@ -60,41 +63,12 @@ class SignupResponse(BaseModel):
     message: str
 
 
-def hash_password(password: str, salt: str = None) -> str:
-    """
-    Hash a password using PBKDF2-HMAC-SHA256.
-    Returns: 'salt$hash' format.
-    """
-    if salt is None:
-        salt = secrets.token_hex(16)
-
-    hashed = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        100_000,  # iterations
-    )
-    return f"{salt}${hashed.hex()}"
-
-
-def verify_password(password: str, stored: str) -> bool:
-    """Verify a password against a stored hash."""
-    try:
-        salt, _ = stored.split("$", 1)
-    except ValueError:
-        return False
-
-    return hmac.compare_digest(hash_password(password, salt), stored)
-
 class LoginRequest(BaseModel):
-    """Request model for user login."""
-
     email: EmailStr
-    password: str = Field(..., min_length=1)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class LoginResponse(BaseModel):
-    """Response model for successful login."""
     access_token: str
     user_id: str
     email: str
@@ -103,78 +77,110 @@ class LoginResponse(BaseModel):
     message: str
 
 
-def login_user(data: LoginRequest) -> LoginResponse:
-    """
-    Verify login credentials against the database.
-    Returns user info if valid, raises ValueError if not.
-    """
-    # Find user by email
-    result = (
+def hash_password(password: str, salt=None):
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), ITERATIONS
+    ).hex()
+    return f"pbkdf2_sha256${ITERATIONS}${salt}${digest}"
+
+
+def verify_password(password: str, stored: str):
+    try:
+        if stored.startswith("pbkdf2_sha256$"):
+            _, count, salt, expected = stored.split("$")
+            count = int(count)
+            if not 100_000 <= count <= 2_000_000:
+                return False
+        else:
+            salt, expected = stored.split("$")
+            count = 100_000
+        actual = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt.encode(), count
+        ).hex()
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
+DUMMY_HASH = hash_password("unavailable-account")
+
+
+def find_email(email):
+    # Escape pattern metacharacters: ilike is case insensitive, not an exact-match operator.
+    safe = str(email).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    rows = (
         supabase.table("profiles")
-        .select("id, email, full_name, country, password_hash")
-        .eq("email", data.email)
+        .select("*")
+        .ilike("email", safe)
+        .limit(1)
         .execute()
+        .data
     )
+    return rows[0] if rows else None
 
-    if not result.data:
+
+def login_user(data):
+    user = find_email(data.email)
+    # Spend comparable hashing work on unknown accounts.
+    valid = (
+        verify_password(data.password, user["password_hash"])
+        if user
+        else verify_password(data.password, DUMMY_HASH)
+    )
+    if not user or not valid:
         raise ValueError("Invalid email or password")
-
-    user = result.data[0]
-
-    # Verify the password
-    if not verify_password(data.password, user["password_hash"]):
-        raise ValueError("Invalid email or password")
-
+    if user.get("requires_verification") and not user.get("email_verified_at"):
+        raise HTTPException(
+            403,
+            "Verify your email before logging in. You can request another link on the account recovery page.",
+        )
+    if not user["password_hash"].startswith(f"pbkdf2_sha256${ITERATIONS}$"):
+        supabase.table("profiles").update(
+            {"password_hash": hash_password(data.password)}
+        ).eq("id", user["id"]).execute()
     return LoginResponse(
-        access_token=issue_session(user["id"]),
+        access_token=issue_session(user["id"], user.get("session_version", 1)),
         user_id=user["id"],
         email=user["email"],
         full_name=user["full_name"],
         country=user["country"],
         message="Login successful",
     )
-def validate_signup(data: SignupRequest) -> SignupResponse:
-    """
-    Validate a signup request and create the user in Supabase.
-    """
-    # Check if email already exists
-    existing = (
-        supabase.table("profiles")
-        .select("id")
-        .eq("email", data.email)
-        .execute()
-    )
 
-    if existing.data:
-        raise ValueError("An account with this email already exists")
 
-    # Hash the password
-    password_hash = hash_password(data.password)
+def validate_signup(data):
+    if find_email(data.email):
+        raise ValueError(
+            "An account with this email already exists. Log in or recover your account."
+        )
+    from mailer import email_enabled
 
-    # Insert the new user
     result = (
         supabase.table("profiles")
         .insert(
             {
-                "email": data.email,
-                "full_name": data.full_name,
-                "country": data.country,
-                "date_of_birth": data.date_of_birth.isoformat(),
-                "password_hash": password_hash,
+                "email": str(data.email).casefold(),
+                "full_name": data.full_name.strip(),
+                "country": data.country.upper(),
+                "date_of_birth": None,
+                "password_hash": hash_password(data.password),
+                "requires_verification": email_enabled(),
             }
         )
         .execute()
     )
-
-    if not result.data:
-        raise RuntimeError("Failed to create user")
-
     user = result.data[0]
+    message = "Account created. You can now log in."
+    if email_enabled():
+        from account_security import send_account_link
 
+        send_account_link(user, "verify")
+        message = "Account created. Check your email to verify it before logging in."
     return SignupResponse(
         user_id=user["id"],
         email=user["email"],
         full_name=user["full_name"],
         country=user["country"],
-        message="Account created successfully. You can now log in.",
+        message=message,
     )

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
 import "./scholsec-theme.css";
+import "./repairs.css";
 import localFont from "next/font/local";
 import AnalyticsConsent from "@/components/AnalyticsConsent";
 const lato = localFont({
