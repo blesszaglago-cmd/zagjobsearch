@@ -160,7 +160,17 @@ def google(data: GoogleRequest, request: Request):
         raise HTTPException(
             401, "Google could not confirm your identity. Please sign in again."
         )
-    existing = find_email(user.email)
+    # A verified email change must not create a second workspace the next time
+    # the same Google identity signs in with its original provider address.
+    linked = (
+        supabase.table("profiles")
+        .select("*")
+        .eq("auth_user_id", str(user.id))
+        .limit(1)
+        .execute()
+        .data
+    )
+    existing = linked[0] if linked else find_email(user.email)
     if existing:
         supabase.table("profiles").update(
             {
