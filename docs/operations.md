@@ -1,14 +1,14 @@
 # Operating jobs.ac.ghana
 
-Updated 17 October 2026. The public address is https://zagjobsearch.vercel.app; jobs.ac.ghana is the product name, not a claimed registered domain. No subscription, paid API, plan upgrade or payment processing is introduced by this release.
+Updated 20 October 2026. The public address is https://zagjobsearch.vercel.app; jobs.ac.ghana is the product name, not a claimed registered domain. No subscription, paid API, plan upgrade or payment processing is introduced by this release.
 
 ## Release and verification
 
-The frontend and backend deploy from the same GitHub main commit to their existing Vercel projects. Run `python -m unittest discover -s backend/tests -v` with `PYTHONPATH=backend`, then frontend ESLint and `npm run build`. Runtime Python dependencies are pinned in `backend/requirements.lock`. CI uses exact action commit SHAs, read-only repository permissions and no production secrets for pull requests.
+The frontend and backend deploy from the same GitHub main commit to their existing Vercel projects. Run `python -m unittest discover -s backend/tests -v` with `PYTHONPATH=backend`, then frontend ESLint and `npm run build`. Runtime Python dependencies are pinned in `backend/requirements.txt` (with the matching lock snapshot retained for CI caching). CI uses exact action commit SHAs, read-only repository permissions and no production secrets for pull requests.
 
 Migrations are additive. Apply `20261017171133_production_reliability_accounts.sql` and `20261017173851_invalidate_account_links.sql` before the new API. Deploy the new API, then apply `20261017172815_automatic_maintenance_schedule.sql`. That schedule is intentionally enabled only after its protected endpoints exist. Rolling back application code does not require removing new columns or user data.
 
-Supabase pg_cron runs the catalogue due check every 15 minutes. Successful collection becomes due after six hours; a partial or failed check retries after 30 minutes. A 10-minute atomic lease prevents overlapping refreshes. Source readers have per-host/global concurrency limits, one retry for transient connection/502/503/504 errors, a 130-second collection bound and a 25-second bounded recheck of previously tracked windowed-source records. Forbidden and rate-limited responses are not bypassed.
+Supabase pg_cron runs the catalogue due check every 15 minutes. Successful collection becomes due after six hours; a partial or failed check retries after 30 minutes. A 10-minute atomic lease prevents overlapping refreshes. Public search responses do not collect sources; only the protected schedule does that work. Source readers have per-host/global concurrency limits, one retry for transient connection/502/503/504 errors, a 130-second collection bound and a 25-second bounded recheck of previously tracked windowed-source records. Forbidden and rate-limited responses are not bypassed.
 
 The optional email worker runs every 15 minutes. It reconciles verified, opted-in reminders and saved searches, then leases up to 100 queued messages. SMTP success precedes the sent marker. Stale leases retry; expired links and cancelled/deleted reminders are excluded. SMTP cannot provide mathematically exactly-once delivery if a process dies after provider acceptance but before the database acknowledgement; a stable Message-ID and dedupe key reduce duplicates.
 
@@ -72,3 +72,11 @@ In Google Analytics, review Enhanced Measurement and disable automatic page/hist
 Share individual job links using the share/WhatsApp controls, saved searches and existing campus or community channels you manage. Measure consented Apply/save/signup actions before spending money. No messages are sent to groups automatically. The About page explains independent Ghana coverage and the public address. The sponsor information page supports one-off enquiries without subscriptions, invented partners, prices, sponsorship deals or accepting money.
 
 Before accepting sponsorship or advertising, confirm the hosting plan permits commercial use. Vercel's Hobby documentation restricts that plan to personal, non-commercial use: https://vercel.com/docs/plans/hobby. A strict zero-dollar budget may require a host that permits commercial activity rather than a paid Vercel upgrade. No paid hosting change is authorised or made by this release.
+
+## Release verification on 20 October 2026
+
+PR #11 is merged and both production deployments are ready. The database scheduler completed a protected refresh with all 26 connected readers successful. Public HTML, security headers, canonical job URLs, robots.txt, a sitemap with 191 opportunity URLs, external Apply redirects and private-page noindex were checked. A temporary account passed signup/login, tracker edits/history, automatic two-day deadline calculation, CSV safety, delete/restore, saved searches, copied-session revocation, password rotation and permanent account deletion; it was removed afterwards. No verification or reminder email was sent.
+
+PageSpeed API verification returned HTTP 429 for the shared service quota; no score is claimed. Interactive mobile/accessibility checks and an actual backup restore remain unverified. Google/email provider flags are false in production.
+
+Supabase currently reports one extension-placement advisory for pg_net. Its HTTP functions actually live in the net schema; the extension metadata was registered in public. Automatic approval review rejected drop/recreate relocation because it could interrupt maintenance or invalidate dependencies. The working extension was retained. A proposal is stored in docs/proposals/maintenance-extension-schema.sql, outside the migrations directory; it is not scheduled or automatically applied. Reconsider only after explicit approval and verification in an isolated compatible database. The next fresh installation uses the extensions metadata schema.

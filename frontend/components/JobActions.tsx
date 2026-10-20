@@ -37,7 +37,7 @@ export default function JobActions({ job }: { job: ActionJob }) {
       .catch(() => {});
     return () => c.abort();
   }, []);
-  async function save() {
+  async function save(automatic = false) {
     setBusy(true);
     try {
       const deadline = job.deadline ? String(job.deadline).slice(0, 10) : null;
@@ -64,7 +64,8 @@ export default function JobActions({ job }: { job: ActionJob }) {
       );
       trackEvent("save_application", { job_id: job.id });
     } catch (e) {
-      setMessage((e as Error).message);
+      if (!automatic || (e as Error & { status?: number }).status !== 401)
+        setMessage((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -95,7 +96,7 @@ export default function JobActions({ job }: { job: ActionJob }) {
         rel="noopener noreferrer"
         onClick={() => {
           trackEvent("apply_click", { job_id: job.id });
-          if (job.can_apply !== false && !record) void save();
+          if (job.can_apply !== false && !record) void save(true);
         }}
       >
         {job.can_apply === false

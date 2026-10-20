@@ -52,12 +52,15 @@ export async function accountRequest(path: string, options: RequestInit = {}) {
   const response = await fetch(`/api/account/${path}`, options);
   const data = await response.json();
   if (!response.ok)
-    throw new Error(
-      typeof data.detail === "string"
-        ? data.detail
-        : response.status === 401
-          ? "Log in to use your workspace."
-          : "Could not complete this request.",
+    throw Object.assign(
+      new Error(
+        typeof data.detail === "string"
+          ? data.detail
+          : response.status === 401
+            ? "Log in to use your workspace."
+            : "Could not complete this request.",
+      ),
+      { status: response.status },
     );
   return data;
 }
