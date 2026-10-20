@@ -8,7 +8,7 @@ export default function Header() {
         <div className="shell">
           <span>
             <span className="ghana-flag" aria-label="Ghana flag" />
-            Built for Ghana. Made for your next move.
+            Independent Ghana opportunity platform.
           </span>
           <span>Search freely. Apply at the source.</span>
         </div>

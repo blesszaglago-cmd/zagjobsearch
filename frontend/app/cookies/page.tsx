@@ -1,6 +1,34 @@
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-export const metadata:Metadata={title:"Cookie Policy",description:"Understand jobs.ac.ghana session cookies, temporary sign-in cookies and optional Google Analytics, and learn how to change your analytics choice.",alternates:{canonical:"/cookies"}};
-const content="# Cookie Policy\n\n**Last Updated:** October 17, 2026\n\njobs.ac.ghana uses minimal cookies to keep you logged in and remember your preferences.\n\n## What We Use\n\n- zag_session: an HttpOnly session cookie that keeps you signed in for up to 12 hours.\n- zag_pkce and zag_oauth_state: temporary Google sign-in protection cookies, lasting up to 10 minutes.\n- Job details selected for CV tailoring are held briefly in sessionStorage and removed after the CV studio reads them.\n\n## Optional Analytics\n\nGoogle Analytics loads only after you choose Allow analytics. It measures visits to public pages. We do not send account details, CV text, application notes, search query parameters or URL fragments. Google may process device, browser and approximate location information. Analytics cookies include _ga and _ga_3N6T2M5ED8 and are configured to expire after 6 months. Your choice is stored on this browser as zag_analytics_consent_v1. Use Analytics settings at the bottom of any page to change your choice. Declining keeps analytics off.\n\n## What We Don't Use\n\n- No advertising cookies\n- No session replay\n- No third-party marketing cookies\n\n## Your Control\n\nYou can clear cookies in your browser at any time. This will log you out and reset your preferences.\n\n## Contact\n\n**Bless Mawumenyo Zaglago**\nEmail: blesszaglago@gmail.com";
-export default function Page(){return <><Header/><main id="main-content" className="shell legal-page"><h1>Cookie Policy</h1><div className="legal-copy">{content.split("\n").slice(1).map((line,i)=>line.startsWith("## ")?<h2 key={i}>{line.slice(3)}</h2>:<p key={i}>{line.replace(/\*\*/g,"")}</p>)}</div></main><Footer/></>}
+export const metadata: Metadata = {
+  title: "Cookie Policy",
+  description:
+    "Understand jobs.ac.ghana session cookies, temporary sign-in cookies and optional Google Analytics, and learn how to change your analytics choice.",
+  alternates: { canonical: "/cookies" },
+};
+const content =
+  "# Cookie Policy\n\nLast updated: October 17, 2026\n\njobs.ac.ghana uses essential sign-in storage and optional analytics.\n\n## Essential storage\n\nzag_session is an HttpOnly sign-in cookie lasting up to 12 hours. Logging out revokes account sessions on the server. zag_pkce and zag_oauth_state protect optional Google sign-in and expire after 10 minutes. Essential cookies use SameSite=Lax and Secure in production.\n\nSaved searches and application records belong to your account in the database. CV assistance is retired and no new CV text is accepted.\n\n## Optional analytics\n\nGoogle Analytics loads only after Allow analytics. It measures public page views and fixed actions such as Apply, sign-in, saving and sharing. We exclude search query parameters, URL fragments, private-page URLs, names, emails and application contents. Google may process device, browser, approximate location and the origin of a referring website.\n\nAnalytics cookies include _ga and _ga_3N6T2M5ED8, configured to expire after six months. Your choice is stored on this browser in localStorage as zag_analytics_consent_v1. Declining keeps analytics off. Withdrawing consent clears the analytics cookies used by this site and reloads the page to unload the script.\n\n## Your control\n\nUse Analytics settings at the bottom of any page to change your choice. Clearing browser data signs you out and resets preferences. No advertising cookies or session replay are installed.\n\n## Contact\n\nBless Mawumenyo Zaglago \u00b7 blesszaglago@gmail.com\n";
+export default function Page() {
+  return (
+    <>
+      <Header />
+      <main id="main-content" className="shell legal-page">
+        <h1>Cookie Policy</h1>
+        <div className="legal-copy">
+          {content
+            .split("\n")
+            .slice(1)
+            .map((line, i) =>
+              line.startsWith("## ") ? (
+                <h2 key={i}>{line.slice(3)}</h2>
+              ) : (
+                <p key={i}>{line.replace(/\*\*/g, "")}</p>
+              ),
+            )}
+        </div>
+      </main>
+      <Footer />
+    </>
+  );
+}

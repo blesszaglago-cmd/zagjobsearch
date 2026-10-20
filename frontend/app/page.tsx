@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import CoverageOverview from "@/components/CoverageOverview";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -127,6 +129,9 @@ export default function Home() {
               </div>
             </div>
             <HomeOpportunities />
+            <Suspense fallback={<p>Loading current coverage…</p>}>
+              <CoverageOverview />
+            </Suspense>
           </div>
         </section>
         <section className="portal-section portal-routes portal-watermark watermark-students">
