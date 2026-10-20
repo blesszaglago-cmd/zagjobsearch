@@ -115,6 +115,36 @@ class AuthenticationTests(unittest.TestCase):
                 )
         self.assertEqual(e.exception.status_code, 503)
 
+    def test_google_keeps_existing_workspace_after_profile_email_changes(self):
+        db = MagicMock()
+        db.auth.get_user.return_value.user = types.SimpleNamespace(
+            id="google-owner",
+            email="original@example.com",
+            email_confirmed_at="2026-10-20",
+            app_metadata={"providers": ["google"]},
+        )
+        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+            {
+                "id": "workspace-owner",
+                "email": "changed@example.com",
+                "session_version": 3,
+                "onboarding_complete": True,
+            }
+        ]
+        with patch.object(account_security, "supabase", db), patch.object(
+            account_security, "rate_limit"
+        ), patch.object(account_security, "find_email") as find, patch.object(
+            account_security, "issue_session", return_value="signed-session"
+        ) as issue:
+            result = account_security.google(
+                account_security.GoogleRequest(access_token="x" * 30),
+                Request({"type": "http"}),
+            )
+        find.assert_not_called()
+        db.table.return_value.insert.assert_not_called()
+        issue.assert_called_once_with("workspace-owner", 3)
+        self.assertEqual(result["access_token"], "signed-session")
+
 
 class ReminderTests(unittest.TestCase):
     def test_deadline_changes_update_automatic_reminders(self):

@@ -50,7 +50,7 @@ Production: https://zagjobsearch.vercel.app. Main release: PR #11, commit 4dcab7
 | 44. Silent result caps | Indexed database search supports pages beyond 50; tracker/export reads page beyond 500 rows. |
 | 45. History lookup index | Application/event foreign-key index added; advisor no longer reports that gap. |
 | 46. Unpinned backend | Exact tested Python versions pinned, with dependency compatibility checked. |
-| 47. Automated tests | GitHub backend/frontend checks added; 47 regressions pass locally, and live account/HTTP/SQL checks supplement CI. Interactive browser checks are not claimed. |
+| 47. Automated tests | GitHub backend/frontend checks added; 48 regressions pass locally, and live account/HTTP/SQL checks supplement CI. Interactive browser checks are not claimed. |
 | 48. CV retirement | New profile reads/writes return Gone; old text can be deleted in Settings; policy/storage references updated. |
 | 49. Outcome analytics | Consented fixed Apply/save/signup/login/share/search events added without private application contents. Analytics account reporting and Enhanced Measurement settings still need owner verification. |
 | 50. Retention/revenue | Saved searches, optional alert pipeline, user-triggered sharing and sponsor information/enquiries added. No subscriptions, paid service, outreach, deal or revenue is created. |
