@@ -1,6 +1,7 @@
 """Public health checks; never read or log account data or credentials."""
 
 import json
+import html
 import sys
 import urllib.error
 import urllib.request
@@ -28,12 +29,23 @@ def main():
     ) < datetime.now(timezone.utc) - timedelta(hours=24):
         raise RuntimeError("Catalogue has not completed a refresh in 24 hours")
     data = get(api + "/catalogue?category=jobs")
+    unavailable = [
+        s.get("source", "unknown")
+        for s in data.get("source_status", [])
+        if s.get("state") != "ok"
+    ]
+    if unavailable or coverage.get("last_error"):
+        raise RuntimeError(
+            "Catalogue source checks need attention: "
+            + ", ".join(unavailable or ["refresh failed"])
+        )
     if not data.get("jobs"):
         raise RuntimeError("No current Ghana jobs returned")
     first = data["jobs"][0]
     page = get(site + "/jobs/" + first["id"], False)
     if (
-        first["title"].split()[0].casefold() not in page.casefold()
+        first["title"] not in html.unescape(page)
+        or 'class="job-description-copy"' not in page
         or 'rel="canonical"' not in page
     ):
         raise RuntimeError("Job details are absent from server HTML")

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pg_cron;
-create extension if not exists pg_net;
+create extension if not exists pg_net with schema extensions;
 create schema if not exists app_private;
 revoke all on schema app_private from public,anon,authenticated;
 grant usage on schema app_private to service_role;

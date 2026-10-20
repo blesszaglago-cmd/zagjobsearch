@@ -959,9 +959,8 @@ def query_catalogue(params):
 def search_catalogue(request: Request, background_tasks: BackgroundTasks = None):
     result = query_catalogue(dict(request.query_params))
     state = refresh_state()
-    due = date(state.get("next_refresh_at"))
-    if background_tasks is not None and due and due <= NOW():
-        background_tasks.add_task(refresh)
+    # The protected database schedule owns refreshes. Public reads must not wait
+    # for a multi-source background task in a serverless ASGI invocation.
     return {
         **result,
         "updated_at": state.get("completed_at"),

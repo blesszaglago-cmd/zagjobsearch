@@ -8,6 +8,7 @@ import asyncio
 import json
 import re
 import xml.etree.ElementTree as ET
+import httpx
 from datetime import timedelta
 from urllib.parse import urljoin, urlparse
 
@@ -242,8 +243,15 @@ async def current_jobs(client, archive_page=9):
     result = await asyncio.gather(
         *(one(u) for u in sorted(links)), return_exceptions=True
     )
-    if result and all(isinstance(j, Exception) for j in result):
-        raise ValueError("Vacancy details unavailable")
+    if any(
+        isinstance(j, Exception)
+        and not (
+            isinstance(j, httpx.HTTPStatusError)
+            and j.response.status_code in (404, 410)
+        )
+        for j in result
+    ):
+        raise ValueError("Vacancy details were incomplete or changed format")
     return "ghana-current-jobs", [j for j in result if isinstance(j, dict)]
 
 
@@ -383,8 +391,15 @@ async def glmis(client):
     result = await asyncio.gather(
         *(page(client, u) for u in sorted(links)), return_exceptions=True
     )
-    if result and all(isinstance(s, Exception) for s in result):
-        raise ValueError("Government vacancy details unavailable")
+    if any(
+        isinstance(s, Exception)
+        and not (
+            isinstance(s, httpx.HTTPStatusError)
+            and s.response.status_code in (404, 410)
+        )
+        for s in result
+    ):
+        raise ValueError("Government vacancy details were incomplete or changed format")
     return "glmis", [
         j
         for u, s in zip(sorted(links), result)
