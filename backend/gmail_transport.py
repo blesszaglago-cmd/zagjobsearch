@@ -10,15 +10,32 @@ import httpx
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
+TOKEN_ERROR_CODES = frozenset(
+    {
+        "invalid_request",
+        "invalid_client",
+        "invalid_grant",
+        "unauthorized_client",
+        "unsupported_grant_type",
+        "invalid_scope",
+        "deleted_client",
+        "admin_policy_enforced",
+    }
+)
 
 
 class GmailTransportError(Exception):
-    """Only fixed categories and numeric status codes leave this transport."""
+    """Only fixed categories, allowlisted OAuth errors and status codes leave."""
 
-    def __init__(self, problem, http_status=None):
+    def __init__(self, problem, http_status=None, oauth_error=None):
         super().__init__(problem)
         self.problem = problem
         self.http_status = http_status
+        self.oauth_error = (
+            oauth_error
+            if isinstance(oauth_error, str) and oauth_error in TOKEN_ERROR_CODES
+            else None
+        )
 
 
 class GmailTransport:
@@ -38,7 +55,15 @@ class GmailTransport:
         except httpx.HTTPError:
             raise GmailTransportError("gmail_api_connection_failed") from None
         if response.status_code != 200:
-            raise GmailTransportError(problem, response.status_code)
+            oauth_error = None
+            if url == TOKEN_URL:
+                try:
+                    failure = response.json()
+                except ValueError:
+                    failure = None
+                if isinstance(failure, dict):
+                    oauth_error = failure.get("error")
+            raise GmailTransportError(problem, response.status_code, oauth_error)
         try:
             payload = response.json()
         except ValueError:

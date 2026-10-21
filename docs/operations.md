@@ -48,7 +48,10 @@ For SMTP, omit `EMAIL_PROVIDER` or set `EMAIL_PROVIDER=smtp`, then configure:
 The maintenance-key protected `GET /cron/email-status` authenticates with the selected
 transport without sending a message. Gmail exchanges the stored refresh token;
 SMTP performs its encrypted login. It returns only configuration/authentication flags,
-a safe failure category and a numeric HTTP/SMTP code when available. A configured
+a safe failure category and a numeric HTTP/SMTP code when available. Gmail token
+failures can also include an allowlisted `oauth_error` such as `invalid_grant` or
+`invalid_client`. Only recognized fixed codes leave the transport; descriptions,
+unknown error strings, nested error objects and credentials are omitted. A configured
 flag alone does not establish successful login or delivery. Passwords and raw
 provider replies are never included in this response or delivery errors. The
 private SMTP diagnostic also accepts `?port=465` or `?port=587` to test either encrypted
@@ -62,6 +65,14 @@ Use an existing provider/account that permits your intended sending volume witho
 A future sender or credential change requires a fresh owner-requested inbox check in addition to the authentication probe. Do not resend expired verification/recovery links from the old queue. In-app tracking, deadline dates and exports remain usable.
 
 On 21 October 2026, the owner corrected the Gmail client secret and the backend was redeployed from reviewed commit `efb144a`. Both Gmail credentials remain Production-only Vercel Secrets. The private authentication probe returned `configured: true` and `authenticated: true`. A fresh password-reset email reached the owner's inbox; the owner reset the password and logged in with it. A read-only database check confirmed the latest reset token was marked used, no reset links remained active for that account, the email was verified and the outbox recorded the message as sent. The owner confirmed storing the client secret and refresh token as separate password-manager entries. No credential values are included in this record. Duplicate token submission, standalone signup verification and reminder/alert inbox delivery still require separate checks. Google branding approval and visitor Google sign-in are not established by this sender test.
+
+A later verification request failed with `gmail_api_authentication_failed (400)`;
+a fresh private probe reproduced it with unchanged environment metadata. The exact
+OAuth error requires the allowlisted diagnostic before selecting a credential fix.
+Do not infer a specific cause from HTTP 400 alone. Current delivery is blocked;
+after recovery, repeat an owner-requested inbox check rather than resending expired
+links. Google documents token endpoint errors at
+https://developers.google.com/identity/openid-connect/reference.
 
 Official transport references: https://developers.google.com/workspace/gmail/api/guides/sending and https://developers.google.com/identity/protocols/oauth2/web-server.
 
