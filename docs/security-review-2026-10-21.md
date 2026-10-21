@@ -51,7 +51,15 @@ The owner configured all three backup repository secrets and started [manual run
 
 This application snapshot covers profiles, applications, application events, legacy career profiles and saved searches. It excludes Supabase Auth identities, schema, project settings and storage. It is distinct from the owner's pre-upgrade PostgreSQL export and the provider's base backup. A successful scheduled run and an isolated restore with login/export/tracker checks remain unverified.
 
-The successful run used older Node.js 20 actions and `ubuntu-latest`. A follow-up pins the three official action releases to reviewed Node.js 24 commit SHAs and uses Ubuntu 24.04. A fresh backup run is required to verify the updated workflow; the existing success is not evidence for those new pins.
+The first successful run used older Node.js 20 actions and `ubuntu-latest`. A follow-up pinned the three official action releases to reviewed Node.js 24 commit SHAs and Ubuntu 24.04. [Run 39637711738](https://github.com/blesszaglago-cmd/zagjobsearch/actions/runs/39637711738) at 16:45 UTC on main `70105c8` passed capture/verification/upload with zero warning/error annotations, independently confirming those updated pins. The owner downloaded the encrypted artifact.
+
+## Local recovery preparation
+
+The owner confirmed PostgreSQL 17.11 at `127.0.0.1:5432` and created an empty UTF-8 test database, `zag_restore_test_20261021`. A new standalone helper reads the encrypted ZIP in memory, requests secrets through hidden prompts and verifies the saved key before requesting a database password. It fixes the host and host address to loopback, restricts database names, refuses nonempty destinations, uses parameterized imports and rolls back failed imports or value comparisons. The source URL is not used for a connection.
+
+The helper's five-table schema was checked against read-only production metadata, including columns, constraints, indexes and the application-event trigger. No production records, database password or encryption key were retrieved. RLS is enabled locally with no public table grants. Existing IDs and historical events are preserved; the event trigger is installed after importing history. Restored session versions advance by one, while an actual recovery still requires rotating the session-signing secret to cover sessions issued after an old snapshot.
+
+Guard checks and a dedicated PostgreSQL 17.11 CI job use synthetic data to test encryption-file compatibility, rejection paths, atomic rollback, overwrite protection and recovered history/JSON. Login and CSV helpers use recovered SQL rows with substituted lookups; this is not a full authenticated HTTP/browser or Supabase Auth test. The owner's actual backup restore remains pending. This helper excludes platform settings, RPCs, queues, maintenance and storage, and is not a full Supabase rebuild.
 
 ## Remaining work
 
