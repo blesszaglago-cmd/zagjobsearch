@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import { Suspense } from "react";
 import CoverageOverview from "@/components/CoverageOverview";
 import type { Metadata } from "next";
@@ -78,7 +79,7 @@ export default function Home() {
           <div className="portal-search-heading">
             <span>YOUR NEXT CHAPTER STARTS WITH A SEARCH</span>
             <Link href="/search?category=jobs&region=Greater+Accra">
-              Start with Accra & Greater Accra ↗
+              Start with Accra & Greater Accra <Icon name="arrow-up-right" />
             </Link>
           </div>
           <SearchForm />
@@ -124,7 +125,7 @@ export default function Home() {
                   the full details, then apply on the original website.
                 </p>
                 <Link href="/search" className="portal-text-link">
-                  View all opportunities <span aria-hidden="true">↗</span>
+                  View all opportunities <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
                 </Link>
               </div>
             </div>
@@ -169,7 +170,7 @@ export default function Home() {
                     <h3>{path.title}</h3>
                     <p>{path.description}</p>
                     <span className="portal-card-link">
-                      {path.label} <span aria-hidden="true">↗</span>
+                      {path.label} <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
                     </span>
                   </div>
                 </Link>
@@ -213,16 +214,16 @@ export default function Home() {
                 need to remember.
               </p>
               <ul className="portal-check-list">
-                <li>Save the role, company and original application link.</li>
-                <li>Update your status as your application progresses.</li>
-                <li>Keep notes, contacts and follow-up dates together.</li>
+                <li><Icon name="check" />Save the role, company and original application link.</li>
+                <li><Icon name="check" />Update your status as your application progresses.</li>
+                <li><Icon name="check" />Keep notes, contacts and follow-up dates together.</li>
               </ul>
               <div className="portal-actions">
                 <Link href="/tracker" className="portal-button green">
-                  Open application tracker ↗
+                  Open application tracker <Icon name="arrow-up-right" />
                 </Link>
                 <Link href="/signup" className="portal-text-link">
-                  Create a free account →
+                  Create a free account <Icon name="arrow-right" />
                 </Link>
               </div>
               <p className="portal-small-note">
@@ -278,7 +279,7 @@ export default function Home() {
               ))}
             </div>
             <div className="portal-source-note">
-              <span aria-hidden="true">↗</span>
+              <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
               <div>
                 <strong>Clear sources. Informed applications.</strong>
                 <p>
@@ -352,7 +353,7 @@ export default function Home() {
             <p>Find your path. Make your move. Keep your progress.</p>
             <div className="portal-actions">
               <Link href="/search" className="portal-button gold">
-                Explore opportunities ↗
+                Explore opportunities <Icon name="arrow-up-right" />
               </Link>
               <Link
                 href="/search?category=scholarships"

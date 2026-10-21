@@ -1,10 +1,11 @@
+import Icon from "@/components/Icon";
 import { regions } from "@/lib/ghana";
 export default function SearchForm() {
   return (
     <form action="/search" className="home-search" role="search">
       <input type="hidden" name="category" value="jobs" />
       <label className="keyword-field">
-        <span aria-hidden="true">⌕</span>
+        <span aria-hidden="true"><Icon name="search" /></span>
         <span className="sr-only">Job title or keywords</span>
         <input name="q" placeholder="Job title, company or skill" />
       </label>
@@ -18,7 +19,7 @@ export default function SearchForm() {
         </select>
       </label>
       <button className="btn-primary" type="submit">
-        Search Ghana <span aria-hidden="true">↗</span>
+        Search Ghana <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
       </button>
     </form>
   );

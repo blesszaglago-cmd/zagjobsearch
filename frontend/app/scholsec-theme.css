@@ -810,17 +810,14 @@ summary:focus-visible {
   align-items: flex-start;
   gap: 13px;
 }
-.portal-check-list li::before {
-  content: "✓";
-  display: grid;
-  place-items: center;
+.portal-check-list li > .ui-icon {
+  box-sizing: content-box;
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 14px;
+  height: 14px;
+  padding: 5px;
   background: var(--portal-gold);
   border-radius: 50%;
-  font-size: 12px;
-  font-weight: 900;
 }
 .portal-feature-copy .portal-small-note {
   font-size: 11px;

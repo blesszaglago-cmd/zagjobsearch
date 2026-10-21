@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import Link from "next/link";
 import { getCoverage, regionSlug } from "@/lib/coverage";
 export default async function CoverageOverview() {
@@ -28,7 +29,7 @@ export default async function CoverageOverview() {
         ))}
       </div>
       <Link className="portal-text-link" href="/sources">
-        Check sources and freshness →
+        Check sources and freshness <Icon name="arrow-right" />
       </Link>
     </div>
   );

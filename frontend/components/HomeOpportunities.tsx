@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -49,7 +50,7 @@ export default function HomeOpportunities() {
             : "No recently checked opportunities are available in this selection right now."}
         </p>
         <Link href="/search" className="portal-text-link">
-          Open opportunity search ↗
+          Open opportunity search <Icon name="arrow-up-right" />
         </Link>
       </div>
     );
@@ -88,7 +89,7 @@ export default function HomeOpportunities() {
               </p>
             ) : null}
             <span className="portal-card-link">
-              Read the full details <span aria-hidden="true">↗</span>
+              Read the full details <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
             </span>
           </div>
         </Link>

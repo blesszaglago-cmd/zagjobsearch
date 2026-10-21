@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { accountRequest, blankApplication } from "@/lib/workspace";
@@ -100,8 +101,9 @@ export default function JobActions({ job }: { job: ActionJob }) {
         }}
       >
         {job.can_apply === false
-          ? "Read official notice ↗"
-          : "Apply at source ↗"}
+          ? "Read official notice"
+          : "Apply at source"}
+        <Icon name="external-link" />
       </a>
       <p>
         {job.can_apply === false
@@ -118,10 +120,10 @@ export default function JobActions({ job }: { job: ActionJob }) {
         </button>
       ) : (
         <Link className="portal-text-link" href="/signup">
-          Create an account for tracking →
+          Create an account for tracking <Icon name="arrow-right" />
         </Link>
       )}
-      {record && <Link href="/tracker">Confirm Applied in your tracker →</Link>}
+      {record && <Link href="/tracker">Confirm Applied in your tracker <Icon name="arrow-right" /></Link>}
       <div className="job-share-actions">
         <button className="btn-outline" onClick={() => void share()}>
           Share job

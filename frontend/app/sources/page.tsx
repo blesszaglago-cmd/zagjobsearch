@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -56,7 +57,7 @@ export default async function Sources() {
               official notices. Clear sources. Direct application links.
             </p>
             <Link href="/search" className="btn-primary">
-              Find opportunities ↗
+              Find opportunities <Icon name="arrow-up-right" />
             </Link>
           </div>
         </section>
@@ -114,7 +115,7 @@ export default async function Sources() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      {source.name} ↗
+                      {source.name} <Icon name="arrow-up-right" />
                     </a>
                   </h3>
                   <p>{source.note}</p>
@@ -169,7 +170,7 @@ export default async function Sources() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      {source.name} ↗
+                      {source.name} <Icon name="arrow-up-right" />
                     </a>
                   </h3>
                   <p>{source.note}</p>

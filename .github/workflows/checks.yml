@@ -42,6 +42,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: node node_modules/eslint/bin/eslint.js app components lib next.config.ts --quiet
+      - run: npm run test:security
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"

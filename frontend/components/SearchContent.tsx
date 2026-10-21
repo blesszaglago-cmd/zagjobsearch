@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -338,7 +339,7 @@ export default function SearchContent({
                 maxLength={200}
               />
               <button className="btn-primary" type="submit">
-                Search ↗
+                Search <Icon name="arrow-up-right" />
               </button>
             </div>
             <div
@@ -368,7 +369,7 @@ export default function SearchContent({
             {updated ? (
               <p className="filter-note">
                 Last refresh {displayDate(updated)}. Rechecked automatically
-                each day. <Link href="/sources">See our sources →</Link>
+                each day. <Link href="/sources">See our sources <Icon name="arrow-right" /></Link>
               </p>
             ) : null}
             {warning ? (
@@ -448,7 +449,7 @@ export default function SearchContent({
                         href={`/jobs/${job.id}?from=${encodeURIComponent(`/search?${filterString}`)}`}
                         className="btn-primary"
                       >
-                        View details ↗
+                        View details <Icon name="arrow-up-right" />
                       </Link>
                       <small>
                         {scholarship && job.listing_status !== "open"

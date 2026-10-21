@@ -1,6 +1,6 @@
-# Audit status — 20 October 2026
+# Audit status, updated 21 October 2026
 
-Production: https://zagjobsearch.vercel.app. Main release: PR #11, commit 4dcab75. Status refers to implemented code and the checks below, not a promise that outside providers are configured or every Ghana vacancy is available.
+Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, commit 4dcab75. Follow-up: [security review, 21 October](security-review-2026-10-21.md). Status refers to implemented code and the checks below, not a promise that outside providers are configured or every Ghana vacancy is available.
 
 | Finding | Result |
 | --- | --- |
@@ -13,8 +13,8 @@ Production: https://zagjobsearch.vercel.app. Main release: PR #11, commit 4dcab7
 | 7. Brand/address mismatch | About/footer disclose the actual Vercel address and independent brand. A custom domain is not purchased or claimed. |
 | 8. Broken Google sign-in | Backend identity validation and PKCE/state callback implemented; unavailable button hidden. Google provider credentials remain owner setup. |
 | 9. Blank OAuth errors | Fixed: actual error state is rendered. |
-| 10. Password reset | Implemented with hashed expiring single-use links and rate limits. Production delivery awaits SMTP configuration. |
-| 11. Email verification | Implemented; opted-in emails require a verified address. Production delivery awaits SMTP. |
+| 10. Password reset | Implemented with hashed expiring single-use links and rate limits. SMTP is configured but delivery failed; Gmail HTTPS delivery remains pending. |
+| 11. Email verification | Implemented; opted-in emails require a verified address. SMTP is configured but delivery failed; Gmail HTTPS delivery remains pending. |
 | 12. Account management | Settings, password/email changes, CSV export, deletion and legacy-text removal added. Core live flows passed. Email changes require delivery. |
 | 13. Repeated authentication attempts | Database-backed IP/account rate budgets added. |
 | 14. Password work factor | New hashes use 600,000 PBKDF2-SHA256 iterations; legacy hashes upgrade on login. |
@@ -50,9 +50,9 @@ Production: https://zagjobsearch.vercel.app. Main release: PR #11, commit 4dcab7
 | 44. Silent result caps | Indexed database search supports pages beyond 50; tracker/export reads page beyond 500 rows. |
 | 45. History lookup index | Application/event foreign-key index added; advisor no longer reports that gap. |
 | 46. Unpinned backend | Exact tested Python versions pinned, with dependency compatibility checked. |
-| 47. Automated tests | GitHub backend/frontend checks added; 48 regressions pass locally, and live account/HTTP/SQL checks supplement CI. Interactive browser checks are not claimed. |
+| 47. Automated tests | GitHub backend/frontend checks added; 63 backend regressions and six frontend security tests pass locally, and live account/HTTP/SQL checks supplement CI. Interactive browser checks are not claimed. |
 | 48. CV retirement | New profile reads/writes return Gone; old text can be deleted in Settings; policy/storage references updated. |
-| 49. Outcome analytics | Consented fixed Apply/save/signup/login/share/search events added without private application contents. Analytics account reporting and Enhanced Measurement settings still need owner verification. |
+| 49. Outcome analytics | Consented fixed Apply/save/signup/login/share/search events added without private application contents. Owner confirmed Analytics access and Realtime operation on 21 October; Enhanced Measurement and detailed reporting still need review. |
 | 50. Retention/revenue | Saved searches, optional alert pipeline, user-triggered sharing and sponsor information/enquiries added. No subscriptions, paid service, outreach, deal or revenue is created. |
 
 ## Verified live
@@ -63,11 +63,11 @@ Signup/login, secure session cookie, profile access, tracker fields/history, dea
 
 ## Still dependent on access, permission or outside systems
 
-- Google OAuth provider configuration and backend SMTP credentials; currently disabled.
-- Search Console/Bing authenticated ownership, sitemap submission and indexing reports; website-side tags and crawl fixes are deployed.
+- Google sign-in provider configuration. SMTP is configured but delivery failed; Gmail HTTPS sender provisioning and delivery verification remain pending.
+- Search ownership, sitemap reads and homepage indexing are confirmed in Google and Bing. Bing read 223 sitemap URLs on 21 October. Search ranking is not guaranteed.
 - Restricted-source feeds or publisher agreements; full national/worldwide coverage is not claimed.
-- Backup repository secrets and an isolated restore drill. Encryption/integrity tests are not a disaster-recovery test.
-- Interactive mobile/accessibility verification. PageSpeed API returned a shared-quota 429, so no score is claimed.
+- Backup repository secrets and an isolated restore drill. Encryption/integrity tests are not a disaster-recovery test. The managed PostgreSQL 17.6 instance also needs the provider security update after backup and upgrade review.
+- Owner confirmed that the site works on a phone. The 21 October mobile PageSpeed report shows Performance 74, Accessibility 100, Best Practices 100 and SEO 100. Further speed improvements and automated browser checks remain pending.
 - One pg_net placement advisory. The automatic approval review blocked its drop/recreate cleanup because it could interrupt maintenance. The protected scheduler remains working; the proposal is outside automatic migrations.
 
 Owner setup is documented in `docs/operations.md`. The product name is not a purchased custom domain. Check hosting commercial-use terms before accepting sponsorship; no paid plan is enabled.

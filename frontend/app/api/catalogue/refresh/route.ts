@@ -1,8 +1,9 @@
 import { API_URL } from "@/lib/api";
+import { isCronAuthorized } from "@/lib/cron-auth";
 export const maxDuration = 180;
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
+  if (!isCronAuthorized(request.headers.get("authorization")))
     return Response.json({ detail: "Not authorised" }, { status: 401 });
   try {
     const r = await fetch(`${API_URL}/catalogue/refresh`, {

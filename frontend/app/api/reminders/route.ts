@@ -1,13 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
 import { API_URL } from "@/lib/api";
+import { isCronAuthorized } from "@/lib/cron-auth";
 export async function GET(request: Request) {
-  const expected = `Bearer ${process.env.CRON_SECRET || ""}`,
-    actual = request.headers.get("authorization") || "";
-  if (
-    !process.env.CRON_SECRET ||
-    actual.length !== expected.length ||
-    !timingSafeEqual(Buffer.from(actual), Buffer.from(expected))
-  )
+  const expected = `Bearer ${process.env.CRON_SECRET || ""}`;
+  if (!isCronAuthorized(request.headers.get("authorization")))
     return new Response("Unauthorised", { status: 401 });
   try {
     const r = await fetch(`${API_URL}/cron/reminders`, {

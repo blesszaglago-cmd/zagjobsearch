@@ -10,6 +10,8 @@ from database.supabase_client import supabase
 def require_cron(authorization):
     secret = os.getenv("CRON_SECRET", "")
     supplied = authorization or ""
+    if not isinstance(supplied, str) or not supplied.isascii():
+        raise HTTPException(401, "Not authorised")
     if secret and hmac.compare_digest(supplied, "Bearer " + secret):
         return
     if supplied.startswith("Bearer ") and 20 <= len(supplied) <= 300:

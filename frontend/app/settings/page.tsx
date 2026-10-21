@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -169,7 +170,7 @@ export default function Settings() {
                   </p>
                 ))}
               <Link className="portal-text-link" href="/tracker">
-                Open your tracker →
+                Open your tracker <Icon name="arrow-right" />
               </Link>
             </section>
             <section className="surface-card">

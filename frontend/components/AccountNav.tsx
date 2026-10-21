@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -44,7 +45,7 @@ export default function AccountNav() {
         <>
           <Link href="/login">Log in</Link>
           <Link href="/signup" className="btn-primary">
-            Create account ↗
+            Create account <Icon name="arrow-up-right" />
           </Link>
         </>
       )}
