@@ -13,8 +13,8 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 | 7. Brand/address mismatch | About/footer disclose the actual Vercel address and independent brand. A custom domain is not purchased or claimed. |
 | 8. Broken Google sign-in | Backend identity validation and PKCE/state callback implemented; unavailable button hidden. Google provider credentials remain owner setup. |
 | 9. Blank OAuth errors | Fixed: actual error state is rendered. |
-| 10. Password reset | Implemented with hashed expiring single-use links and rate limits. Gmail HTTPS transport added after SMTP connection failures; fresh inbox/recovery verification remains pending. |
-| 11. Email verification | Implemented; opted-in emails require a verified address. Gmail sender credentials provisioned privately; fresh inbox verification remains pending. |
+| 10. Password reset | Hashed expiring single-use links and rate limits implemented. Owner-requested inbox delivery, password reset and subsequent login passed on 21 October. Database checks confirmed the reset link was marked used and no reset links remained active for that account. |
+| 11. Email verification | Implemented; opted-in emails require a verified address. Gmail authentication and owner recovery delivery passed. Standalone signup verification delivery remains untested. |
 | 12. Account management | Settings, password/email changes, CSV export, deletion and legacy-text removal added. Core live flows passed. Email changes require delivery. |
 | 13. Repeated authentication attempts | Database-backed IP/account rate budgets added. |
 | 14. Password work factor | New hashes use 600,000 PBKDF2-SHA256 iterations; legacy hashes upgrade on login. |
@@ -35,7 +35,7 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 | 29. Duplicates | Canonical URLs and cross-source matching improved, source provenance retained, and distinct same-source employer requisitions preserved. |
 | 30. Reports/employer claims | Public issue-report form and private review queue added; source presence is not represented as an employer background check. |
 | 31. Old but open employer roles | Explicitly published official employer feed entries survive the arbitrary age cutoff. Unknown old board records remain conservative. |
-| 32. Five-reminder cap | Removed; paged reconciliation and a leased 100-message worker added. Gmail HTTPS transport added; actual delivery still needs verification. |
+| 32. Five-reminder cap | Removed; paged reconciliation and a leased 100-message worker added. Gmail authentication and owner recovery delivery passed; reminder/alert inbox delivery still needs a separate check. |
 | 33. Expired queue starvation | Expiry/active-status checks precede pagination and delivery. |
 | 34. Wrong date after deadline edit | Automatic reminders recompute deadline minus two days; explicit manual dates remain available. |
 | 35. Premature sent flag | Durable outbox marks sent after provider acceptance, retries failures and cancels obsolete/deleted reminders. Gmail failures and malformed responses never mark messages sent. Neither transport guarantees exactly-once delivery after every possible crash. |
@@ -67,9 +67,11 @@ At 16:35 UTC on 21 October, the owner manually started [encrypted application ba
 
 The owner downloaded the second artifact, verified that the saved key decrypts it and confirmed saving that recovery key in a password manager. By 21:17 UTC on 21 October, the actual encrypted artifact had been restored into the isolated local PostgreSQL 17.11 database `zag_restore_test_20261021`. The terminal reported `restore_verified: true` and `snapshot_session_versions_advanced: true`, confirming the helper's transactional import and restored-value comparisons. Only aggregate results were shared; no credentials or private row values were retrieved. This completes the owner's application-data restore drill. See operations for its scope and the remaining platform, key-rotation and authenticated HTTP/UI recovery checks.
 
+On 21 October, the owner corrected the Gmail client secret and the backend was redeployed from reviewed commit `efb144a`. The private authentication probe then returned `configured: true` and `authenticated: true`. A fresh owner-requested password-reset email reached the inbox. The owner completed the reset and logged in with the new password. A read-only database check returned booleans confirming the latest reset token was used, no reset links remained active for that account, the account email was verified and the outbox recorded the message as sent. The owner also confirmed saving the client secret and refresh token as separate password-manager entries. This verifies live account recovery. A duplicate token submission, standalone signup verification and opted-in reminder/alert delivery were not tested in this check; Google branding and visitor Google sign-in remain separate work.
+
 ## Still dependent on access, permission or outside systems
 
-- Google sign-in provider configuration. Gmail HTTPS sender credentials have been provisioned as Production-only settings after SMTP connection failures. Backend activation and a fresh requested inbox/recovery check remain separate verification steps. Google branding remains unverified; sender consent does not establish public app approval.
+- Google sign-in provider configuration and Google branding verification. The Production-only Gmail HTTPS sender passed authentication and owner inbox/recovery checks; sender consent does not establish public app approval. Standalone signup verification and opted-in reminder/alert inbox checks remain pending.
 - Search ownership, sitemap reads and homepage indexing are confirmed in Google and Bing. Bing read 223 sitemap URLs on 21 October. Search ranking is not guaranteed.
 - Restricted-source feeds or publisher agreements; full national/worldwide coverage is not claimed.
 - The first successful scheduled backup run and a full platform recovery drill. Manual encrypted capture/verification/upload and an isolated restore of the owner's actual application-data artifact passed. The separate pre-upgrade PostgreSQL export has passed only an archive-read check; its restore, provider configuration and authenticated HTTP/UI recovery remain unverified.
