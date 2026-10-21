@@ -10,7 +10,7 @@ Migrations are additive. Apply `20261017171133_production_reliability_accounts.s
 
 Supabase pg_cron runs the catalogue due check every 15 minutes. Successful collection becomes due after six hours; a partial or failed check retries after 30 minutes. A 10-minute atomic lease prevents overlapping refreshes. Public search responses do not collect sources; only the protected schedule does that work. Source readers have per-host/global concurrency limits, one retry for transient connection/502/503/504 errors, a 130-second collection bound and a 25-second bounded recheck of previously tracked windowed-source records. Forbidden and rate-limited responses are not bypassed.
 
-The optional email worker runs every 15 minutes. It reconciles verified, opted-in reminders and saved searches, then leases up to 100 queued messages. SMTP success precedes the sent marker. Stale leases retry; expired links and cancelled/deleted reminders are excluded. SMTP cannot provide mathematically exactly-once delivery if a process dies after provider acceptance but before the database acknowledgement; a stable Message-ID and dedupe key reduce duplicates.
+The optional email worker runs every 15 minutes. It reconciles verified, opted-in reminders and saved searches, then leases up to 100 queued messages. Provider acceptance precedes the sent marker. Stale leases retry; expired links and cancelled/deleted reminders are excluded. Neither transport can provide mathematically exactly-once delivery if a process dies after provider acceptance but before the database acknowledgement; a stable Message-ID and dedupe key reduce duplicates.
 
 The private maintenance secret is generated inside the database. It is not committed or placed in public JavaScript. Routine status checks may be dispatched with `select app_private.dispatch_maintenance('check');`; inspect only status and response content in `net._http_response`, never the request-header queue. Only postgres can dispatch these fixed destinations; verification is service-role-only. Do not expose cron, outbox or token tables publicly.
 
@@ -24,20 +24,34 @@ The public Sources page distinguishes successful, unavailable and external-only 
 
 Problem reports go to the private `job_reports` table in the connected Supabase project. Review open reports in the Table Editor, inspect the attributed original posting and close confirmed invalid catalogue records. Anonymous reports do not automatically hide a listing, since that would allow abuse. Source presence is not an employer background check or a guarantee of hiring.
 
-## Email delivery: owner setup still required
+## Email delivery
 
-The app's existing password accounts use its own hashed-password table. Therefore setting Supabase Auth SMTP alone does **not** configure these application emails. Configure the following **backend Vercel production environment variables**, using the provider's credential fields rather than sending secrets in chat:
+The app's existing password accounts use its own hashed-password table. Therefore setting Supabase Auth SMTP alone does **not** configure these application emails. Select one transport with `EMAIL_PROVIDER` in the **backend Vercel production environment variables**. Unknown providers and incomplete credentials disable email rather than silently falling back.
 
-- `SMTP_HOST`, `SMTP_PORT` (465 uses implicit TLS; 587 requires STARTTLS)
-- `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (a sender the provider permits)
+For the Gmail HTTPS transport, set:
+
+- `EMAIL_PROVIDER=gmail_api`
+- `EMAIL_FROM` to the owner-authorized Gmail mailbox, optionally with the product display name
+- `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`
 - `FRONTEND_URL=https://zagjobsearch.vercel.app`
 
-The maintenance-key protected `GET /cron/email-status` authenticates with SMTP
-without sending a message. It returns only configuration/authentication flags,
-a safe failure category and an SMTP numeric code when available. A configured
+The owner connects only the service mailbox, using the `gmail.send` permission. This is separate from visitor Google sign-in. Store the client secret and refresh token as Production-only Vercel Secrets, with separate credentials for any future preview testing. Enter values directly in provider settings, never chat, screenshots, source or issue descriptions. OAuth Playground's request/response panel can expose credentials even when its settings panel is closed. After an exposure, revoke the Google Account app connection, replace the client secret, and obtain a fresh refresh token privately.
+
+Gmail refreshes short-lived access tokens in memory for each worker batch. It uses fixed Google HTTPS endpoints with certificate verification, no redirects or environment proxies, and bounded HTTP timeouts. MIME messages are base64url encoded. A message is marked sent only after Gmail returns a successful response with a message ID. Failed, redirected, malformed and rate-limited responses remain failures with bounded queue retries; there is no automatic retry of an individual HTTP send. Provider response bodies, credentials, bearer tokens and message contents are excluded from diagnostics. A token refresh proves authentication, not inbox delivery or Google branding approval. Gmail quotas and permission revocation still apply.
+
+For SMTP, omit `EMAIL_PROVIDER` or set `EMAIL_PROVIDER=smtp`, then configure:
+
+- `SMTP_HOST`, `SMTP_PORT` (465 uses implicit TLS; 587 requires STARTTLS)
+- `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (or `EMAIL_FROM`, a sender the provider permits)
+- `FRONTEND_URL=https://zagjobsearch.vercel.app`
+
+The maintenance-key protected `GET /cron/email-status` authenticates with the selected
+transport without sending a message. Gmail exchanges the stored refresh token;
+SMTP performs its encrypted login. It returns only configuration/authentication flags,
+a safe failure category and a numeric HTTP/SMTP code when available. A configured
 flag alone does not establish successful login or delivery. Passwords and raw
 provider replies are never included in this response or delivery errors. The
-private diagnostic also accepts `?port=465` or `?port=587` to test either encrypted
+private SMTP diagnostic also accepts `?port=465` or `?port=587` to test either encrypted
 connection without changing the configured delivery port. Safe exception names
 and numeric OS error codes distinguish network failures from rejected logins.
 Gmail's grouped 16-letter app-password paste format is accepted. SMTP connections
@@ -45,7 +59,11 @@ validate the server certificate and hostname.
 
 Use an existing provider/account that permits your intended sending volume without charges. There is no promise that a free provider can send unlimited email. Redeploy the backend after adding variables. `/auth/config` exposes only capability flags and the existing public Supabase key, never SMTP credentials. Test delivery with an owner-controlled account, verify the sender and spam placement, then test a recovery link once and confirm replay fails. New registrations require verification only when email is configured; existing accounts can continue to log in. Verified email and explicit opt-in are required for reminder/alert delivery.
 
-Until delivery is configured and tested, recovery/reminders are implemented but not operational; the UI says so. In-app tracking, deadline dates and exports remain usable.
+Until a fresh requested email reaches the owner's inbox, actual delivery remains unverified. Do not resend expired verification/recovery links from the old queue. In-app tracking, deadline dates and exports remain usable.
+
+On 21 October the owner completed the Gmail consent and token exchange, revoked connections and replaced secrets exposed in screenshots, then reported saving a fresh refresh token privately. Both Gmail secrets were confirmed as Production-only Vercel Secrets through metadata reads, without retrieving their values. The client ID was added as Production configuration. Activation and a fresh inbox/recovery check are still separate release steps.
+
+Official transport references: https://developers.google.com/workspace/gmail/api/guides/sending and https://developers.google.com/identity/protocols/oauth2/web-server.
 
 ## Google sign-in: owner setup still required
 

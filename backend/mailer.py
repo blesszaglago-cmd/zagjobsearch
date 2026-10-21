@@ -1,4 +1,4 @@
-"""Private leased email outbox. Delivery is recorded only after SMTP succeeds."""
+"""Private leased email outbox. Record delivery after provider acceptance only."""
 
 import time
 import logging
@@ -8,12 +8,69 @@ import ssl
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from database.supabase_client import supabase
+from gmail_transport import GmailTransport, GmailTransportError
+
+
+def email_provider():
+    return os.getenv("EMAIL_PROVIDER", "smtp").strip().casefold()
+
+
+def email_sender():
+    return (os.getenv("EMAIL_FROM") or os.getenv("SMTP_FROM", "")).strip()
 
 
 def email_enabled():
-    return all(
-        os.getenv(k) for k in ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]
-    )
+    provider = email_provider()
+    if provider == "gmail_api":
+        keys = [
+            "GMAIL_OAUTH_CLIENT_ID",
+            "GMAIL_OAUTH_CLIENT_SECRET",
+            "GMAIL_REFRESH_TOKEN",
+        ]
+    elif provider == "smtp":
+        keys = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"]
+    else:
+        return False
+    return bool(email_sender()) and all(os.getenv(k, "").strip() for k in keys)
+
+
+def email_failure(error):
+    if isinstance(error, GmailTransportError):
+        result = {"problem": error.problem, "error_type": "GmailTransportError"}
+        if isinstance(error.http_status, int):
+            result["http_status"] = error.http_status
+        return result
+    if email_provider() == "gmail_api":
+        return {
+            "problem": "gmail_api_delivery_failed",
+            "error_type": type(error).__name__,
+        }
+    return smtp_failure(error)
+
+
+def open_email_connection(port=None):
+    if email_provider() == "gmail_api":
+        if port is not None:
+            raise GmailTransportError("gmail_api_smtp_port_not_applicable")
+        connection = GmailTransport()
+        try:
+            connection.authenticate()
+        except Exception:
+            connection.quit()
+            raise
+        return connection
+    return open_smtp(port)
+
+
+def expired(value, now):
+    """A malformed expiry is never permission to send an old account link."""
+    if value is None:
+        return False
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return stamp.tzinfo is None or stamp <= now
+    except (AttributeError, TypeError, ValueError):
+        return True
 
 
 def smtp_failure(error):
@@ -78,9 +135,9 @@ def check_email_connection(port=None):
     if not email_enabled():
         return {"configured": False, "authenticated": False}
     try:
-        connection = open_smtp(port)
+        connection = open_email_connection(port)
     except Exception as error:
-        return {"configured": True, "authenticated": False, **smtp_failure(error)}
+        return {"configured": True, "authenticated": False, **email_failure(error)}
     try:
         connection.quit()
     except Exception:
@@ -146,9 +203,9 @@ def deliver(delivery_id=None, batch_size=100):
         return {"sent": 0, "failed": 0, "configured": True}
     connection_failure = None
     try:
-        connection = open_smtp()
+        connection = open_email_connection()
     except Exception as error:
-        connection_failure = smtp_failure(error)
+        connection_failure = email_failure(error)
         connection = None
     try:
         for index, item in enumerate(claimed):
@@ -160,6 +217,12 @@ def deliver(delivery_id=None, batch_size=100):
                 break
             now = datetime.now(timezone.utc)
             try:
+                account_expiry = None
+                if expired(item.get("expires_at"), now):
+                    supabase.table("email_outbox").update(
+                        {"status": "cancelled", "claimed_at": None}
+                    ).eq("id", item["id"]).execute()
+                    continue
                 if connection is None:
                     raise RuntimeError("Email provider unavailable")
                 if item["dedupe_key"].startswith("account:"):
@@ -173,12 +236,14 @@ def deliver(delivery_id=None, batch_size=100):
                     if (
                         not token
                         or token[0].get("used_at")
-                        or token[0]["expires_at"] < now.isoformat()
+                        or not token[0].get("expires_at")
+                        or expired(token[0]["expires_at"], now)
                     ):
                         supabase.table("email_outbox").update(
                             {"status": "cancelled", "claimed_at": None}
                         ).eq("id", item["id"]).execute()
                         continue
+                    account_expiry = token[0]["expires_at"]
                 if item.get("application_id"):
                     apps = (
                         supabase.table("applications")
@@ -241,12 +306,18 @@ def deliver(delivery_id=None, batch_size=100):
                         continue
                 message = EmailMessage()
                 message["From"], message["To"], message["Subject"] = (
-                    os.environ["SMTP_FROM"],
+                    email_sender(),
                     item["recipient"],
                     item["subject"],
                 )
                 message["Message-ID"] = f"<{item['id']}@jobs-ac-ghana>"
                 message.set_content(item["body"])
+                now = datetime.now(timezone.utc)
+                if expired(item.get("expires_at"), now) or expired(account_expiry, now):
+                    supabase.table("email_outbox").update(
+                        {"status": "cancelled", "claimed_at": None}
+                    ).eq("id", item["id"]).execute()
+                    continue
                 connection.send_message(message)
                 stamp = now.isoformat()
                 supabase.table("email_outbox").update(
@@ -265,10 +336,12 @@ def deliver(delivery_id=None, batch_size=100):
             except Exception as error:
                 failed += 1
                 delay = min(360, 5 * 2 ** min(item.get("attempts", 1), 6))
-                failure = connection_failure or smtp_failure(error)
+                failure = connection_failure or email_failure(error)
                 description = failure["problem"]
                 if "smtp_code" in failure:
                     description += f" ({failure['smtp_code']})"
+                if "http_status" in failure:
+                    description += f" ({failure['http_status']})"
                 supabase.table("email_outbox").update(
                     {
                         "status": "failed",

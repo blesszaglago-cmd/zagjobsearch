@@ -13,8 +13,8 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 | 7. Brand/address mismatch | About/footer disclose the actual Vercel address and independent brand. A custom domain is not purchased or claimed. |
 | 8. Broken Google sign-in | Backend identity validation and PKCE/state callback implemented; unavailable button hidden. Google provider credentials remain owner setup. |
 | 9. Blank OAuth errors | Fixed: actual error state is rendered. |
-| 10. Password reset | Implemented with hashed expiring single-use links and rate limits. SMTP is configured but delivery failed; Gmail HTTPS delivery remains pending. |
-| 11. Email verification | Implemented; opted-in emails require a verified address. SMTP is configured but delivery failed; Gmail HTTPS delivery remains pending. |
+| 10. Password reset | Implemented with hashed expiring single-use links and rate limits. Gmail HTTPS transport added after SMTP connection failures; fresh inbox/recovery verification remains pending. |
+| 11. Email verification | Implemented; opted-in emails require a verified address. Gmail sender credentials provisioned privately; fresh inbox verification remains pending. |
 | 12. Account management | Settings, password/email changes, CSV export, deletion and legacy-text removal added. Core live flows passed. Email changes require delivery. |
 | 13. Repeated authentication attempts | Database-backed IP/account rate budgets added. |
 | 14. Password work factor | New hashes use 600,000 PBKDF2-SHA256 iterations; legacy hashes upgrade on login. |
@@ -35,10 +35,10 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 | 29. Duplicates | Canonical URLs and cross-source matching improved, source provenance retained, and distinct same-source employer requisitions preserved. |
 | 30. Reports/employer claims | Public issue-report form and private review queue added; source presence is not represented as an employer background check. |
 | 31. Old but open employer roles | Explicitly published official employer feed entries survive the arbitrary age cutoff. Unknown old board records remain conservative. |
-| 32. Five-reminder cap | Removed; paged reconciliation and a leased 100-message worker added. Sending awaits SMTP. |
+| 32. Five-reminder cap | Removed; paged reconciliation and a leased 100-message worker added. Gmail HTTPS transport added; actual delivery still needs verification. |
 | 33. Expired queue starvation | Expiry/active-status checks precede pagination and delivery. |
 | 34. Wrong date after deadline edit | Automatic reminders recompute deadline minus two days; explicit manual dates remain available. |
-| 35. Premature sent flag | Durable outbox marks sent after SMTP success, retries failures and cancels obsolete/deleted reminders. SMTP cannot guarantee exactly-once delivery after every possible crash. |
+| 35. Premature sent flag | Durable outbox marks sent after provider acceptance, retries failures and cancels obsolete/deleted reminders. Gmail failures and malformed responses never mark messages sent. Neither transport guarantees exactly-once delivery after every possible crash. |
 | 36. Refresh recovery | Protected database schedule, shorter lease, bounded retry and six-hour normal refresh enabled; protected live run returned 200. |
 | 37. Failure alerts | Public source health and scheduled GitHub health workflow added; failures appear in Actions. Owner notification settings control email alerts. |
 | 38. Silent parser failures | Malformed sources are distinguished from empty eligible results; partial malformed details fail the source check, retry sooner and surface to monitoring. |
@@ -69,7 +69,7 @@ The owner downloaded the second artifact, verified that the saved key decrypts i
 
 ## Still dependent on access, permission or outside systems
 
-- Google sign-in provider configuration. SMTP is configured but delivery failed; Gmail HTTPS sender provisioning and delivery verification remain pending.
+- Google sign-in provider configuration. Gmail HTTPS sender credentials have been provisioned as Production-only settings after SMTP connection failures. Backend activation and a fresh requested inbox/recovery check remain separate verification steps. Google branding remains unverified; sender consent does not establish public app approval.
 - Search ownership, sitemap reads and homepage indexing are confirmed in Google and Bing. Bing read 223 sitemap URLs on 21 October. Search ranking is not guaranteed.
 - Restricted-source feeds or publisher agreements; full national/worldwide coverage is not claimed.
 - The first successful scheduled backup run and a full platform recovery drill. Manual encrypted capture/verification/upload and an isolated restore of the owner's actual application-data artifact passed. The separate pre-upgrade PostgreSQL export has passed only an archive-read check; its restore, provider configuration and authenticated HTTP/UI recovery remain unverified.
