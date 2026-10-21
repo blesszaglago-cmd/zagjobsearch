@@ -7,7 +7,8 @@ not evidence that it closed; it expires from public results after 48h unchecked.
 import asyncio
 import json
 import re
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 import httpx
 from datetime import timedelta
 from urllib.parse import urljoin, urlparse
@@ -294,8 +295,8 @@ async def hireghana(client):
         if isinstance(response, Exception) or response.status_code != 200:
             continue
         try:
-            root = ET.fromstring(response.text)
-        except ET.ParseError:
+            root = ET.fromstring(response.text, forbid_dtd=True)
+        except (ET.ParseError, DefusedXmlException):
             continue
         items = root.findall("./channel/item")
         valid = valid or bool(items)

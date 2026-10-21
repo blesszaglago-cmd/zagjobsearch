@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -59,7 +60,7 @@ export default async function Details({ params, searchParams }: Props) {
       <Header />
       <main id="main-content" className="shell job-detail">
         <Link href={from} className="back-link">
-          ← Back to your results
+          <Icon name="arrow-left" /> Back to your results
         </Link>
         {schema && (
           <script
@@ -157,7 +158,7 @@ export default async function Details({ params, searchParams }: Props) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Read the full requirements and instructions at {job.source} ↗
+                Read the full requirements and instructions at {job.source} <Icon name="arrow-up-right" />
               </a>
             </p>
           )}
@@ -175,7 +176,7 @@ export default async function Details({ params, searchParams }: Props) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            View source ↗
+            View source <Icon name="arrow-up-right" />
           </a>
         </p>
         {job.source_urls && job.source_urls.length > 1 && (
@@ -184,7 +185,7 @@ export default async function Details({ params, searchParams }: Props) {
             {job.source_urls.map((url) => (
               <p key={url}>
                 <a href={url} target="_blank" rel="noopener noreferrer">
-                  {new URL(url).hostname} ↗
+                  {new URL(url).hostname} <Icon name="arrow-up-right" />
                 </a>
               </p>
             ))}

@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import Link from "next/link";
 import { accountRequest } from "@/lib/workspace";
@@ -86,7 +87,7 @@ export default function SaveSearch({ filters }: { filters: string }) {
           >
             Save search
           </button>
-          <Link href="/saved-searches">View saved searches →</Link>
+          <Link href="/saved-searches">View saved searches <Icon name="arrow-right" /></Link>
         </div>
       )}
       {message && (

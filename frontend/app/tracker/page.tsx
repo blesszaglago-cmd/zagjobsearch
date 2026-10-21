@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -271,7 +272,7 @@ export default function Tracker() {
                         : "No reminder set"}
                     </small>
                   </span>
-                  <span aria-hidden="true">↗</span>
+                  <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
                 </button>
               ))}
               {filtered.length === 0 && (

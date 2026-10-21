@@ -1,4 +1,5 @@
 "use client";
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -94,7 +95,7 @@ export default function HomeHero() {
             <p>{slide.description}</p>
             <div className="portal-actions">
               <Link className="portal-button gold" href={slide.href}>
-                {slide.primary} <span aria-hidden="true">↗</span>
+                {slide.primary} <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
               </Link>
               <Link className="portal-button ghost" href={slide.secondaryHref}>
                 {slide.secondary}
@@ -110,7 +111,7 @@ export default function HomeHero() {
             }
             aria-label="Previous slide"
           >
-            ‹
+            <Icon name="chevron-left" />
           </button>
           <div className="portal-hero-dots">
             {slides.map((item, i) => (
@@ -132,7 +133,7 @@ export default function HomeHero() {
             }
             aria-label="Next slide"
           >
-            ›
+            <Icon name="chevron-right" />
           </button>
         </div>
       </div>

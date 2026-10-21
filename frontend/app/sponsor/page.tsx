@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import type { Metadata } from "next";
@@ -40,7 +41,7 @@ export default function Sponsor() {
           className="btn-primary"
           href="mailto:blesszaglago@gmail.com?subject=jobs.ac.ghana%20employer%20or%20sponsorship%20enquiry"
         >
-          Enquire by email ↗
+          Enquire by email <Icon name="arrow-up-right" />
         </a>
         <p>
           Never pay an application fee to jobs.ac.ghana. We do not sell

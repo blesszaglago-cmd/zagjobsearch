@@ -7,6 +7,8 @@ Aggregates job listings from multiple sources.
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import os
 
@@ -28,6 +30,22 @@ app = FastAPI(
     description="Ghana jobs, remote roles accepting Ghana applicants, and scholarships",
     version="2.1.0",
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, error: RequestValidationError):
+    # Model-level errors otherwise echo the entire submitted account form.
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {key: item[key] for key in ("type", "loc", "msg") if key in item}
+                for item in error.errors()
+            ]
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
 
 # CORS — allow the frontend to call this API
 app.add_middleware(
