@@ -28,5 +28,9 @@ jobs:
         run: npm --prefix frontend audit --omit=dev --audit-level=high
       - name: Audit locked backend dependencies
         run: pip-audit -r backend/requirements.lock --no-deps --disable-pip --strict
+      - name: Audit optional local restore dependencies
+        run: pip-audit -r scripts/requirements-restore.txt --strict
       - name: Scan backend source
         run: bandit -q -r backend -x backend/tests --severity-level medium --confidence-level medium
+      - name: Scan local restore helper
+        run: bandit -q scripts/restore_backup.py --severity-level medium --confidence-level medium

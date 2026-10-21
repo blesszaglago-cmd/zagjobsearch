@@ -1,0 +1,3 @@
+# Optional local restore drill only. Not an application runtime dependency.
+cryptography==50.0.2
+psycopg[binary]==3.3.6

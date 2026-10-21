@@ -68,11 +68,27 @@ For `SUPABASE_BACKUP_SERVICE_KEY`, create a separate secret key named `github_ba
 
 The daily workflow snapshots profiles, applications, application events, old career profiles and saved searches. It encrypts in memory with AES-256-GCM, verifies decryption/integrity and uploads only an encrypted artifact retained for seven days. Rate-limit buckets, recovery tokens, email bodies and regenerable catalogue data are excluded. Records may change during collection; relational checks reject an inconsistent snapshot rather than uploading an invalid one.
 
-The first run reported deprecated Node.js 20 actions and a forthcoming `ubuntu-latest` image change. The workflow now pins official Node.js 24 action releases by commit SHA and uses `ubuntu-24.04`. These runtime changes require a fresh manual or scheduled run; the successful run above used the earlier action pins.
+The first run reported deprecated Node.js 20 actions and a forthcoming `ubuntu-latest` image change. The workflow now pins official Node.js 24 action releases by commit SHA and uses `ubuntu-24.04`. [Manual run 39637711738](https://github.com/blesszaglago-cmd/zagjobsearch/actions/runs/39637711738) at 16:45 UTC on main `70105c8` verified those updated pins: capture, verification and encrypted upload succeeded, with zero warning/error annotations in the job log. The owner downloaded this encrypted artifact for the recovery drill.
 
 Local checks have verified encryption/decryption, incorrect-key rejection, completeness and account/application relationships. `python scripts/backup.py verify FILE.enc` validates an encrypted artifact without printing personal data. **This is not a full PostgreSQL backup and not a completed disaster-recovery test.** Supabase Auth identities, project settings, schema, email-provider configuration and storage are not included. Migrations in this repository plus the original workspace schema are needed to rebuild the database. Export Supabase Auth separately if Google sign-in is enabled.
 
 Before claiming recoverability, restore a decrypted snapshot into an isolated empty test database using the correct schema, preserve IDs/FKs and status events, invalidate all sessions, and test login/export/tracker there. Do not import test restores into production. Keep a dated restore record. No new paid project or backup product is automatically purchased.
+
+### Local application-data restore drill
+
+The owner confirmed a local PostgreSQL 17.11 server at `127.0.0.1:5432` and created an empty UTF-8 database named `zag_restore_test_20261021`. The downloaded encrypted application ZIP is distinct from the earlier `pg_dump` archive. `pg_restore` cannot import this encrypted application ZIP.
+
+`scripts/restore_backup.py` is a standalone helper requiring Python 3.10 or newer and the optional packages in `scripts/requirements-restore.txt`. Install those packages in a separate virtual environment. Keep both source files available on the owner's computer; no Supabase API key or database password belongs in either file.
+
+First run `python scripts/restore_backup.py PATH_TO_DOWNLOADED_ZIP --verify-only`. Enter the exact saved encryption key at the hidden prompt. This checks the owner-held copy of the key against the actual backup, including accidental key regeneration. The ZIP is read in memory without extracting files or writing a plaintext backup. Unexpected archive members, wrong keys, changed ciphertext, incomplete tables and unsupported columns stop the operation.
+
+Then run `python scripts/restore_backup.py PATH_TO_DOWNLOADED_ZIP --database zag_restore_test_20261021`. The helper requests the saved encryption key and local PostgreSQL password through hidden prompts. It fixes both the host and network address to `127.0.0.1`, accepts only `zag_restore_test_...` database names, and refuses an existing database containing user tables, views or sequences. The snapshot's source URL is never used as a destination.
+
+The helper reconstructs the five application tables, constraints, indexes, RLS and event trigger from the schema reviewed on 21 October. It imports all records using JSON parameters in one transaction and compares every restored value in PostgreSQL before committing. Historical events load before the trigger is installed, avoiding extra events. Restored profile session versions advance by one. Any import or verification failure rolls back the schema and records. Only aggregate verification/counts print; the local database itself contains private restored data and password hashes.
+
+CI runs guard tests and real PostgreSQL 17.11 restores with synthetic fixtures. It checks rollback, refusal to overwrite, preserved IDs/JSON/history, the event trigger, and production login/CSV helpers using restored rows with substituted data lookups. This does not test a browser, the real PostgREST service or Supabase Auth. A passing CI drill does not establish that the owner's actual backup has been restored; that separate owner result remains pending.
+
+This recovery schema deliberately excludes catalogue data, provider settings, delivery/recovery queues, application RPCs, Supabase Auth identities, storage and scheduled maintenance. It is not a platform rebuild or a production migration. Recheck it when the source schema changes. For a real recovery, also rotate `SESSION_SECRET` before reopening access; advancing a version from an old snapshot alone cannot invalidate every session issued after that snapshot. Complete the remaining platform and authenticated HTTP/UI recovery checks before claiming full disaster recovery.
 
 ## Search indexing
 
