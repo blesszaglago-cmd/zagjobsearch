@@ -42,6 +42,13 @@ const slides = [
 ];
 export default function HomeHero() {
   const [active, setActive] = useState(0);
+  const [visited, setVisited] = useState([0]);
+  function showSlide(index: number) {
+    setVisited((previous) =>
+      previous.includes(index) ? previous : [...previous, index],
+    );
+    setActive(index);
+  }
   const slide = slides[active];
   return (
     <section
@@ -55,14 +62,17 @@ export default function HomeHero() {
             key={item.label}
             className={`portal-hero-image${i === active ? " active" : ""}`}
           >
-            <Image
-              src={item.image}
-              alt=""
-              fill
-              sizes="100vw"
-              preload={i === 0}
-              style={{ objectPosition: i === 1 ? "65% 45%" : "70% 50%" }}
-            />
+            {visited.includes(i) && (
+              <Image
+                src={item.image}
+                alt=""
+                fill
+                sizes="100vw"
+                loading="eager"
+                fetchPriority={i === 0 ? "high" : "auto"}
+                style={{ objectPosition: i === 1 ? "65% 45%" : "70% 50%" }}
+              />
+            )}
           </div>
         ))}
       </div>
@@ -96,9 +106,7 @@ export default function HomeHero() {
           <button
             type="button"
             onClick={() =>
-              setActive(
-                (previous) => (previous + slides.length - 1) % slides.length,
-              )
+              showSlide((active + slides.length - 1) % slides.length)
             }
             aria-label="Previous slide"
           >
@@ -111,7 +119,7 @@ export default function HomeHero() {
                 key={item.label}
                 aria-label={`Show ${item.label.toLowerCase()} slide`}
                 aria-pressed={active === i}
-                onClick={() => setActive(i)}
+                onClick={() => showSlide(i)}
               >
                 <span className="sr-only">{item.label}</span>
               </button>
@@ -120,7 +128,7 @@ export default function HomeHero() {
           <button
             type="button"
             onClick={() =>
-              setActive((previous) => (previous + 1) % slides.length)
+              showSlide((active + 1) % slides.length)
             }
             aria-label="Next slide"
           >

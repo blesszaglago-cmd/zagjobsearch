@@ -7,9 +7,9 @@ import localFont from "next/font/local";
 import AnalyticsConsent from "@/components/AnalyticsConsent";
 const lato = localFont({
   src: [
-    { path: "../public/fonts/lato-400.ttf", weight: "400" },
-    { path: "../public/fonts/lato-700.ttf", weight: "700" },
-    { path: "../public/fonts/lato-900.ttf", weight: "900" },
+    { path: "../public/fonts/lato-400.woff2", weight: "400" },
+    { path: "../public/fonts/lato-700.woff2", weight: "700" },
+    { path: "../public/fonts/lato-900.woff2", weight: "900" },
   ],
   variable: "--font-lato",
   display: "swap",
@@ -17,10 +17,10 @@ const lato = localFont({
 });
 const raleway = localFont({
   src: [
-    { path: "../public/fonts/raleway-600.ttf", weight: "600" },
-    { path: "../public/fonts/raleway-700.ttf", weight: "700" },
-    { path: "../public/fonts/raleway-800.ttf", weight: "800" },
-    { path: "../public/fonts/raleway-900.ttf", weight: "900" },
+    { path: "../public/fonts/raleway-600.woff2", weight: "600" },
+    { path: "../public/fonts/raleway-700.woff2", weight: "700" },
+    { path: "../public/fonts/raleway-800.woff2", weight: "800" },
+    { path: "../public/fonts/raleway-900.woff2", weight: "900" },
   ],
   variable: "--font-raleway",
   display: "swap",

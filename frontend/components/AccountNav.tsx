@@ -7,9 +7,11 @@ export default function AccountNav() {
   const [signedIn, setSignedIn] = useState(false);
   useEffect(() => {
     const c = new AbortController();
-    fetch("/api/account/me", { signal: c.signal })
-      .then((r) => {
-        if (!c.signal.aborted) setSignedIn(r.ok);
+    fetch("/api/account/session", { cache: "no-store", signal: c.signal })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!c.signal.aborted) setSignedIn(data.signed_in === true);
       })
       .catch(() => {});
     return () => c.abort();
