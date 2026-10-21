@@ -61,12 +61,14 @@ A fresh scheduled run checked all 26 connected readers. Current primary inventor
 
 Signup/login, secure session cookie, profile access, tracker fields/history, deadline calculation, CSV formula safety, deletion/undo, saved-search ownership, logout revocation, password rotation and account deletion passed through the real frontend account proxy. The temporary account was removed, with zero leftover test profiles. No user application was submitted and no email was sent.
 
+On 21 October, after creating a local database export that passed an archive-read check and reviewing the downtime warning, the owner completed Supabase's managed update from PostgreSQL 17.6 to build `17.11.0.003`. Post-upgrade SQL confirms PostgreSQL `17.11`, and the management API reports `ACTIVE_HEALTHY`. Catalogue/profile/application counts and three active schedules matched the pre-upgrade snapshot. All 12 application tables retained RLS and their restricted client grants. Public search and job details returned 200; guest account access remained 401. See the security review for the check scope and remaining backup limitations.
+
 ## Still dependent on access, permission or outside systems
 
 - Google sign-in provider configuration. SMTP is configured but delivery failed; Gmail HTTPS sender provisioning and delivery verification remain pending.
 - Search ownership, sitemap reads and homepage indexing are confirmed in Google and Bing. Bing read 223 sitemap URLs on 21 October. Search ranking is not guaranteed.
 - Restricted-source feeds or publisher agreements; full national/worldwide coverage is not claimed.
-- Backup repository secrets and an isolated restore drill. Encryption/integrity tests are not a disaster-recovery test. The managed PostgreSQL 17.6 instance also needs the provider security update after backup and upgrade review.
+- Automated backup repository secrets and an isolated restore drill. The owner's local pre-upgrade export passed an archive-read check; neither this nor the existing encryption/integrity tests establishes a successful disaster-recovery restore.
 - Owner confirmed that the site works on a phone. The 21 October mobile PageSpeed report shows Performance 74, Accessibility 100, Best Practices 100 and SEO 100. Further speed improvements and automated browser checks remain pending.
 - One pg_net placement advisory. The automatic approval review blocked its drop/recreate cleanup because it could interrupt maintenance. The protected scheduler remains working; the proposal is outside automatic migrations.
 
