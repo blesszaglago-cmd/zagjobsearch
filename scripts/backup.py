@@ -53,7 +53,18 @@ def open_snapshot(ciphertext, encryption_key):
 
 def capture():
     url = os.environ["SUPABASE_URL"].rstrip("/")
-    credential = os.environ["SUPABASE_SECRET_KEY"]
+    credential = os.environ["SUPABASE_SECRET_KEY"].strip()
+    if (
+        not credential
+        or not credential.isascii()
+        or any(ord(char) < 33 or ord(char) > 126 for char in credential)
+    ):
+        raise ValueError("Invalid SUPABASE_SECRET_KEY configuration")
+    if credential.startswith("sb_publishable_"):
+        raise ValueError("Backups require a Supabase secret or service-role key")
+    headers = {"apikey": credential}
+    if not credential.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {credential}"
     tables = {}
     for name in TABLES:
         rows, offset = [], 0
@@ -68,7 +79,7 @@ def capture():
             )
             request = urllib.request.Request(
                 f"{url}/rest/v1/{name}?{query}",
-                headers={"apikey": credential, "Authorization": f"Bearer {credential}"},
+                headers=headers,
             )
             with urllib.request.urlopen(request, timeout=40) as response:
                 page = json.load(response)
