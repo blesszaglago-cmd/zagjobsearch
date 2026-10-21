@@ -58,9 +58,11 @@ export const metadata: Metadata = {
   },
   robots: { index: true, follow: true },
   verification: {
-    google:
+    google: [
       process.env.GOOGLE_SITE_VERIFICATION ||
-      "ccdjXJLmlwLDVpjItOdDxzoHX-4mf1GiKsKJTl4U3xI",
+        "ccdjXJLmlwLDVpjItOdDxzoHX-4mf1GiKsKJTl4U3xI",
+      "N83Zh-uNyXw_jaGtrXEzS5jRvOvMUYZen_hvalUhfOQ",
+    ],
     other: { "msvalidate.01": "819718EA799FB55CC8FC11E90BE4A7E6" },
   },
 };
