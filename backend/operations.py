@@ -1,5 +1,6 @@
 """Authenticated operational checks without recipient, token or password disclosure."""
 
+from typing import Literal
 from fastapi import APIRouter, Header
 from database.supabase_client import supabase
 from security import require_cron
@@ -9,9 +10,11 @@ router = APIRouter()
 
 
 @router.get("/cron/email-status")
-def email_status(authorization: str = Header(default="")):
+def email_status(
+    authorization: str = Header(default=""), port: Literal["465", "587"] | None = None
+):
     require_cron(authorization)
-    return check_email_connection()
+    return check_email_connection(int(port) if port else None)
 
 
 @router.get("/cron/status")

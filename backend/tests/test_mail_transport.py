@@ -65,6 +65,7 @@ class MailTransportTests(unittest.TestCase):
                 "configured": True,
                 "authenticated": False,
                 "problem": "smtp_authentication_failed",
+                "error_type": "SMTPAuthenticationError",
                 "smtp_code": 535,
             },
         )
@@ -80,6 +81,52 @@ class MailTransportTests(unittest.TestCase):
         smtp.send_message.assert_not_called()
         smtp.quit.assert_called_once()
 
+    def test_network_failure_retains_errno_without_raw_error(self):
+        with patch.object(mailer, "email_enabled", return_value=True), patch.object(
+            mailer,
+            "open_smtp",
+            side_effect=ConnectionRefusedError(111, "private detail"),
+        ):
+            result = mailer.check_email_connection()
+        self.assertEqual(result["error_type"], "ConnectionRefusedError")
+        self.assertEqual(result["errno"], 111)
+        self.assertNotIn("private detail", str(result))
+
+    def test_starttls_must_succeed_before_credentials_are_sent(self):
+        smtp = MagicMock()
+        smtp.starttls.side_effect = smtplib.SMTPNotSupportedError("No TLS")
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.gmail.com",
+                "SMTP_USER": "sender@example.com",
+                "SMTP_PASSWORD": "abcdefghijklmnop",
+            },
+        ), patch.object(mailer.smtplib, "SMTP", return_value=smtp):
+            with self.assertRaises(smtplib.SMTPNotSupportedError):
+                mailer.open_smtp(587)
+        smtp.login.assert_not_called()
+        smtp.close.assert_called_once()
+
+    def test_starttls_uses_verified_tls_before_login(self):
+        smtp = MagicMock()
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.gmail.com",
+                "SMTP_USER": "sender@example.com",
+                "SMTP_PASSWORD": "abcdefghijklmnop",
+            },
+        ), patch.object(mailer.smtplib, "SMTP", return_value=smtp):
+            mailer.open_smtp(587)
+        context = smtp.starttls.call_args.kwargs["context"]
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertEqual(
+            [call[0] for call in smtp.method_calls],
+            ["ehlo", "starttls", "ehlo", "login"],
+        )
+
     def test_public_request_cannot_probe_email_credentials(self):
         app = FastAPI()
         app.include_router(operations.router)
@@ -87,6 +134,19 @@ class MailTransportTests(unittest.TestCase):
             response = TestClient(app).get("/cron/email-status")
         self.assertEqual(response.status_code, 401)
         probe.assert_not_called()
+
+    def test_authorized_check_accepts_only_the_supported_tls_ports(self):
+        app = FastAPI()
+        app.include_router(operations.router)
+        with patch.object(operations, "require_cron"), patch.object(
+            operations, "check_email_connection", return_value={"authenticated": True}
+        ) as probe:
+            client = TestClient(app)
+            self.assertEqual(client.get("/cron/email-status?port=587").status_code, 200)
+            probe.assert_called_once_with(587)
+            probe.reset_mock()
+            self.assertEqual(client.get("/cron/email-status?port=25").status_code, 422)
+            probe.assert_not_called()
 
 
 if __name__ == "__main__":
