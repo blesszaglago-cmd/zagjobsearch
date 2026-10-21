@@ -28,7 +28,7 @@ Problem reports go to the private `job_reports` table in the connected Supabase 
 
 The app's existing password accounts use its own hashed-password table. Therefore setting Supabase Auth SMTP alone does **not** configure these application emails. Configure the following **backend Vercel production environment variables**, using the provider's credential fields rather than sending secrets in chat:
 
-- `SMTP_HOST`, `SMTP_PORT` (the worker currently supports implicit TLS, normally 465)
+- `SMTP_HOST`, `SMTP_PORT` (465 uses implicit TLS; 587 requires STARTTLS)
 - `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (a sender the provider permits)
 - `FRONTEND_URL=https://zagjobsearch.vercel.app`
 
@@ -36,7 +36,10 @@ The maintenance-key protected `GET /cron/email-status` authenticates with SMTP
 without sending a message. It returns only configuration/authentication flags,
 a safe failure category and an SMTP numeric code when available. A configured
 flag alone does not establish successful login or delivery. Passwords and raw
-provider replies are never included in this response or delivery errors.
+provider replies are never included in this response or delivery errors. The
+private diagnostic also accepts `?port=465` or `?port=587` to test either encrypted
+connection without changing the configured delivery port. Safe exception names
+and numeric OS error codes distinguish network failures from rejected logins.
 Gmail's grouped 16-letter app-password paste format is accepted. SMTP connections
 validate the server certificate and hostname.
 

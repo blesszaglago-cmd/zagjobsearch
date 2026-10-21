@@ -32,14 +32,17 @@ def smtp_failure(error):
         problem = "smtp_configuration_invalid"
     else:
         problem = "smtp_delivery_failed"
-    result = {"problem": problem}
+    result = {"problem": problem, "error_type": type(error).__name__}
     code = getattr(error, "smtp_code", None)
     if isinstance(code, int):
         result["smtp_code"] = code
+    number = getattr(error, "errno", None)
+    if isinstance(number, int):
+        result["errno"] = number
     return result
 
 
-def open_smtp():
+def open_smtp(port_override=None):
     host = os.environ["SMTP_HOST"].strip()
     password = os.environ["SMTP_PASSWORD"]
     # Google displays its generated password in four groups. Accept that paste
@@ -48,13 +51,18 @@ def open_smtp():
         compact = "".join(password.split())
         if len(compact) == 16 and compact.isascii() and compact.isalpha():
             password = compact
-    connection = smtplib.SMTP_SSL(
-        host,
-        int(os.getenv("SMTP_PORT", "465").strip()),
-        timeout=8,
-        context=ssl.create_default_context(),
+    port = port_override or int(os.getenv("SMTP_PORT", "465").strip())
+    context = ssl.create_default_context()
+    connection = (
+        smtplib.SMTP(host, port, timeout=8)
+        if port == 587
+        else smtplib.SMTP_SSL(host, port, timeout=8, context=context)
     )
     try:
+        if port == 587:
+            connection.ehlo()
+            connection.starttls(context=context)
+            connection.ehlo()
         connection.login(os.environ["SMTP_USER"].strip(), password)
         return connection
     except Exception:
@@ -65,12 +73,12 @@ def open_smtp():
         raise
 
 
-def check_email_connection():
+def check_email_connection(port=None):
     """Authenticate without sending mail. Only the private operations API uses it."""
     if not email_enabled():
         return {"configured": False, "authenticated": False}
     try:
-        connection = open_smtp()
+        connection = open_smtp(port)
     except Exception as error:
         return {"configured": True, "authenticated": False, **smtp_failure(error)}
     try:
