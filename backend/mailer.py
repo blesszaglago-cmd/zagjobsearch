@@ -39,6 +39,8 @@ def email_failure(error):
         result = {"problem": error.problem, "error_type": "GmailTransportError"}
         if isinstance(error.http_status, int):
             result["http_status"] = error.http_status
+        if error.oauth_error is not None:
+            result["oauth_error"] = error.oauth_error
         return result
     if email_provider() == "gmail_api":
         return {

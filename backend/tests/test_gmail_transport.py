@@ -130,6 +130,59 @@ class GmailTransportTests(unittest.TestCase):
         self.assertEqual(factory.call_args.kwargs["timeout"], 8.0)
         smtp.assert_not_called()
 
+    def test_authentication_probe_reports_only_allowlisted_oauth_errors(self):
+        private = " ".join(ENV.values()) + " unit-access-token"
+        cases = [
+            (
+                httpx.Response(
+                    400,
+                    json={"error": "invalid_grant", "error_description": private},
+                ),
+                "invalid_grant",
+            ),
+            (
+                httpx.Response(
+                    401,
+                    json={"error": "invalid_client", "error_description": private},
+                ),
+                "invalid_client",
+            ),
+            (httpx.Response(400, json={"error": private}), None),
+            (
+                httpx.Response(
+                    400, json={"error": {"code": "invalid_grant", "detail": private}}
+                ),
+                None,
+            ),
+            (httpx.Response(400, json=["invalid_grant", private]), None),
+            (httpx.Response(400, text=private), None),
+        ]
+        for response, code in cases:
+            with self.subTest(status=response.status_code, code=code):
+                with self.transport(lambda request: response) as (requests, _, smtp):
+                    result = mailer.check_email_connection()
+                expected = {
+                    "configured": True,
+                    "authenticated": False,
+                    "problem": "gmail_api_authentication_failed",
+                    "error_type": "GmailTransportError",
+                    "http_status": response.status_code,
+                }
+                if code:
+                    expected["oauth_error"] = code
+                self.assertEqual(result, expected)
+                self.assertEqual(
+                    [str(request.url) for request in requests],
+                    [gmail_transport.TOKEN_URL],
+                )
+                for secret in (
+                    ENV["GMAIL_OAUTH_CLIENT_SECRET"],
+                    ENV["GMAIL_REFRESH_TOKEN"],
+                    "unit-access-token",
+                ):
+                    self.assertNotIn(secret, json.dumps(result))
+                smtp.assert_not_called()
+
     def test_unicode_mime_and_token_reuse_for_two_accepted_queue_messages(self):
         first, second = queued(), queued(id="delivery-2")
         db, updates = database([first, second])
