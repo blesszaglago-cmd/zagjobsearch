@@ -7,7 +7,7 @@ export default function Header() {
       <div className="portal-topbar">
         <div className="shell">
           <span>
-            <span className="ghana-flag" aria-label="Ghana flag" />
+            <span className="ghana-flag" role="img" aria-label="Ghana flag" />
             Independent Ghana opportunity platform.
           </span>
           <span>Search freely. Apply at the source.</span>
