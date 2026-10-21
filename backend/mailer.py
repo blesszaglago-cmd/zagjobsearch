@@ -4,6 +4,7 @@ import time
 import logging
 import os
 import smtplib
+import ssl
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from database.supabase_client import supabase
@@ -13,6 +14,73 @@ def email_enabled():
     return all(
         os.getenv(k) for k in ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]
     )
+
+
+def smtp_failure(error):
+    """Describe a failure without retaining provider replies or credentials."""
+    if isinstance(error, smtplib.SMTPAuthenticationError):
+        problem = "smtp_authentication_failed"
+    elif isinstance(error, ssl.SSLCertVerificationError):
+        problem = "smtp_certificate_failed"
+    elif isinstance(error, TimeoutError):
+        problem = "smtp_timeout"
+    elif isinstance(error, smtplib.SMTPResponseException):
+        problem = "smtp_provider_rejected"
+    elif isinstance(error, OSError):
+        problem = "smtp_connection_failed"
+    elif isinstance(error, (KeyError, ValueError)):
+        problem = "smtp_configuration_invalid"
+    else:
+        problem = "smtp_delivery_failed"
+    result = {"problem": problem}
+    code = getattr(error, "smtp_code", None)
+    if isinstance(code, int):
+        result["smtp_code"] = code
+    return result
+
+
+def open_smtp():
+    host = os.environ["SMTP_HOST"].strip()
+    password = os.environ["SMTP_PASSWORD"]
+    # Google displays its generated password in four groups. Accept that paste
+    # format without altering passwords belonging to another SMTP provider.
+    if host.casefold() == "smtp.gmail.com":
+        compact = "".join(password.split())
+        if len(compact) == 16 and compact.isascii() and compact.isalpha():
+            password = compact
+    connection = smtplib.SMTP_SSL(
+        host,
+        int(os.getenv("SMTP_PORT", "465").strip()),
+        timeout=8,
+        context=ssl.create_default_context(),
+    )
+    try:
+        connection.login(os.environ["SMTP_USER"].strip(), password)
+        return connection
+    except Exception:
+        try:
+            connection.close()
+        except Exception:
+            pass
+        raise
+
+
+def check_email_connection():
+    """Authenticate without sending mail. Only the private operations API uses it."""
+    if not email_enabled():
+        return {"configured": False, "authenticated": False}
+    try:
+        connection = open_smtp()
+    except Exception as error:
+        return {"configured": True, "authenticated": False, **smtp_failure(error)}
+    try:
+        connection.quit()
+    except Exception:
+        try:
+            connection.close()
+        except Exception:
+            pass
+    return {"configured": True, "authenticated": True}
 
 
 def enqueue(
@@ -68,12 +136,11 @@ def deliver(delivery_id=None, batch_size=100):
     started = time.monotonic()
     if not claimed:
         return {"sent": 0, "failed": 0, "configured": True}
+    connection_failure = None
     try:
-        connection = smtplib.SMTP_SSL(
-            os.environ["SMTP_HOST"], int(os.getenv("SMTP_PORT", "465")), timeout=8
-        )
-        connection.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
-    except Exception:
+        connection = open_smtp()
+    except Exception as error:
+        connection_failure = smtp_failure(error)
         connection = None
     try:
         for index, item in enumerate(claimed):
@@ -187,18 +254,22 @@ def deliver(delivery_id=None, batch_size=100):
                         {"email_reminder_sent_at": stamp}
                     ).eq("id", item["application_id"]).execute()
                 sent += 1
-            except Exception:
+            except Exception as error:
                 failed += 1
                 delay = min(360, 5 * 2 ** min(item.get("attempts", 1), 6))
+                failure = connection_failure or smtp_failure(error)
+                description = failure["problem"]
+                if "smtp_code" in failure:
+                    description += f" ({failure['smtp_code']})"
                 supabase.table("email_outbox").update(
                     {
                         "status": "failed",
                         "claimed_at": None,
                         "next_attempt_at": (now + timedelta(minutes=delay)).isoformat(),
-                        "last_error": "Email delivery failed; retry scheduled",
+                        "last_error": description + "; retry scheduled",
                     }
                 ).eq("id", item["id"]).execute()
-                logging.warning("Email delivery deferred")
+                logging.warning("Email delivery deferred: %s", description)
     finally:
         if connection:
             try:

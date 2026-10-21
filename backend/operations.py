@@ -3,9 +3,15 @@
 from fastapi import APIRouter, Header
 from database.supabase_client import supabase
 from security import require_cron
-from mailer import email_enabled
+from mailer import email_enabled, check_email_connection
 
 router = APIRouter()
+
+
+@router.get("/cron/email-status")
+def email_status(authorization: str = Header(default="")):
+    require_cron(authorization)
+    return check_email_connection()
 
 
 @router.get("/cron/status")

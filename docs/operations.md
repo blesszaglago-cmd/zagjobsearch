@@ -32,6 +32,14 @@ The app's existing password accounts use its own hashed-password table. Therefor
 - `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (a sender the provider permits)
 - `FRONTEND_URL=https://zagjobsearch.vercel.app`
 
+The maintenance-key protected `GET /cron/email-status` authenticates with SMTP
+without sending a message. It returns only configuration/authentication flags,
+a safe failure category and an SMTP numeric code when available. A configured
+flag alone does not establish successful login or delivery. Passwords and raw
+provider replies are never included in this response or delivery errors.
+Gmail's grouped 16-letter app-password paste format is accepted. SMTP connections
+validate the server certificate and hostname.
+
 Use an existing provider/account that permits your intended sending volume without charges. There is no promise that a free provider can send unlimited email. Redeploy the backend after adding variables. `/auth/config` exposes only capability flags and the existing public Supabase key, never SMTP credentials. Test delivery with an owner-controlled account, verify the sender and spam placement, then test a recovery link once and confirm replay fails. New registrations require verification only when email is configured; existing accounts can continue to log in. Verified email and explicit opt-in are required for reminder/alert delivery.
 
 Until delivery is configured and tested, recovery/reminders are implemented but not operational; the UI says so. In-app tracking, deadline dates and exports remain usable.
