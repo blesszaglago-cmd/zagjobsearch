@@ -1,4 +1,4 @@
-# Audit status, updated 21 October 2026
+# Audit status, updated 22 October 2026
 
 Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, commit 4dcab75. Follow-up: [security review, 21 October](security-review-2026-10-21.md). Status refers to implemented code and the checks below, not a promise that outside providers are configured or every Ghana vacancy is available.
 
@@ -13,8 +13,8 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 | 7. Brand/address mismatch | About/footer disclose the actual Vercel address and independent brand. A custom domain is not purchased or claimed. |
 | 8. Broken Google sign-in | Backend identity validation and PKCE/state callback implemented; unavailable button hidden. Google provider credentials remain owner setup. |
 | 9. Blank OAuth errors | Fixed: actual error state is rendered. |
-| 10. Password reset | Hashed expiring single-use links and rate limits implemented. Owner inbox delivery, reset and subsequent login passed on 21 October; the used-link state was confirmed. A later Gmail authentication failure currently blocks fresh email delivery. |
-| 11. Email verification | Implemented; opted-in emails require a verified address. A subsequent owner verification request failed before delivery with Gmail authentication HTTP 400. Standalone verification delivery remains unverified. |
+| 10. Password reset | Hashed expiring single-use links and rate limits implemented. Owner inbox delivery, reset and subsequent login passed on 21 October; the used-link state was confirmed. Gmail authentication and fresh verification delivery passed again on 22 October after updating the sender credentials. |
+| 11. Email verification | Implemented; opted-in emails require a verified address. A fresh verification message reached the owner's inbox on 22 October, the owner completed verification and a boolean database check confirmed the link was used and the message marked sent. New-account signup verification remains a separate check. |
 | 12. Account management | Settings, password/email changes, CSV export, deletion and legacy-text removal added. Core live flows passed. Email changes require delivery. |
 | 13. Repeated authentication attempts | Database-backed IP/account rate budgets added. |
 | 14. Password work factor | New hashes use 600,000 PBKDF2-SHA256 iterations; legacy hashes upgrade on login. |
@@ -35,7 +35,7 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 | 29. Duplicates | Canonical URLs and cross-source matching improved, source provenance retained, and distinct same-source employer requisitions preserved. |
 | 30. Reports/employer claims | Public issue-report form and private review queue added; source presence is not represented as an employer background check. |
 | 31. Old but open employer roles | Explicitly published official employer feed entries survive the arbitrary age cutoff. Unknown old board records remain conservative. |
-| 32. Five-reminder cap | Removed; paged reconciliation and a leased 100-message worker added. The Gmail sender subsequently began failing authentication; reminder/alert inbox delivery still needs a separate check after recovery. |
+| 32. Five-reminder cap | Removed; paged reconciliation and a leased 100-message worker added. Gmail authentication and owner verification delivery passed on 22 October; reminder/alert inbox delivery still needs a separate check. |
 | 33. Expired queue starvation | Expiry/active-status checks precede pagination and delivery. |
 | 34. Wrong date after deadline edit | Automatic reminders recompute deadline minus two days; explicit manual dates remain available. |
 | 35. Premature sent flag | Durable outbox marks sent after provider acceptance, retries failures and cancels obsolete/deleted reminders. Gmail failures and malformed responses never mark messages sent. Neither transport guarantees exactly-once delivery after every possible crash. |
@@ -69,11 +69,13 @@ The owner downloaded the second artifact, verified that the saved key decrypts i
 
 On 21 October, the owner corrected the Gmail client secret and the backend was redeployed from reviewed commit `efb144a`. The private authentication probe then returned `configured: true` and `authenticated: true`. A fresh owner-requested password-reset email reached the inbox. The owner completed the reset and logged in with the new password. A read-only database check returned booleans confirming the latest reset token was used, no reset links remained active for that account, the account email was verified and the outbox recorded the message as sent. The owner also confirmed saving the client secret and refresh token as separate password-manager entries. This verifies live account recovery. A duplicate token submission, standalone signup verification and opted-in reminder/alert delivery were not tested in this check; Google branding and visitor Google sign-in remain separate work.
 
-Later that evening, an owner verification request failed before sending: the outbox recorded `gmail_api_authentication_failed (400)`. A fresh private authentication probe also returned HTTP 400. Production environment metadata matched the successful recovery check. The exact provider cause has not yet been established. The private diagnostic now permits only a fixed allowlist of OAuth error codes; it excludes error descriptions, unknown strings and credential values. Current email delivery requires investigation and a fresh inbox check after recovery; the earlier password-reset success remains a completed historical check.
+Later that evening, an owner verification request failed before sending: the outbox recorded `gmail_api_authentication_failed (400)`. A fresh private authentication probe also returned HTTP 400. Production environment metadata matched the successful recovery check. The private diagnostic permits only a fixed allowlist of OAuth error codes; it excludes error descriptions, unknown strings and credential values. The later diagnostic identified `invalid_grant`; the reason the old grant became invalid remains unknown.
+
+On 22 October, the owner obtained a fresh refresh token using their own OAuth credentials and updated the Production-only Vercel Secret. An initial redeployment returned `invalid_client`. After the owner aligned the saved client secret with the successful Playground exchange, a redeployment from reviewed commit `a4919bf` returned `configured: true` and `authenticated: true`. A fresh owner-requested verification email reached the inbox, and the owner completed verification on the site. A boolean-only database check confirmed the address was verified, the latest verification link was recently marked used, no verification links remained active for that account and the outbox recorded the message as sent. No credential or account-link values are included in this record. This checks verification for an existing owner account; new-account signup and opted-in reminder/alert inbox delivery remain separate checks.
 
 ## Still dependent on access, permission or outside systems
 
-- Gmail sender authentication currently fails with HTTP 400. Establish the provider error and restore authentication before repeating owner verification and opted-in reminder/alert inbox checks.
+- New-account signup verification and opted-in reminder/alert inbox checks. Gmail authentication and an existing owner account's verification email and completion passed on 22 October. Future sender changes require fresh authentication and inbox checks.
 - Google sign-in provider configuration and Google branding verification. Sender consent does not establish public app approval.
 - Search ownership, sitemap reads and homepage indexing are confirmed in Google and Bing. Bing read 223 sitemap URLs on 21 October. Search ranking is not guaranteed.
 - Restricted-source feeds or publisher agreements; full national/worldwide coverage is not claimed.
