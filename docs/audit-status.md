@@ -57,7 +57,7 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 
 ## Verified live
 
-A fresh scheduled run checked all 26 connected readers. Current primary inventory: 181 Ghana jobs, two early-career roles, seven Ghana-eligible remote roles and one open scholarship notice; closed/unconfirmed Scholsec notices remain in their separate views. These are a dated snapshot. Missing source salaries, levels and deadlines are still explicitly missing.
+An earlier scheduled check covered all 26 readers and returned 181 Ghana jobs, two early-career roles, seven Ghana-eligible remote roles and one open scholarship notice. These are historical counts; closed/unconfirmed Scholsec notices retain their separate views. The [22 October coverage review](listing-coverage-plan.md) records the newer baseline and direct-employer expansion. Missing source salaries, levels and deadlines remain explicitly missing.
 
 Signup/login, secure session cookie, profile access, tracker fields/history, deadline calculation, CSV formula safety, deletion/undo, saved-search ownership, logout revocation, password rotation and account deletion passed through the real frontend account proxy. The temporary account was removed, with zero leftover test profiles. No user application was submitted and no email was sent.
 
