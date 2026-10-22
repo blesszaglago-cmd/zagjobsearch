@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Header
 from database.supabase_client import supabase
 import ghana_sources
+import employer_sources
 from listing_quality import enrich, deduplicate, identity
 
 router = APIRouter()
@@ -148,7 +149,9 @@ def classify(title, employment=""):
             return key
     if re.search(r"part[ -]?time", e + " " + t):
         return "part-time"
-    if re.search(r"contract|fixed[ -]term|consultan|freelance|temporary", e + " " + t):
+    if re.search(
+        r"contract|fixed[ -]term|\bftc\b|consultan|freelance|temporary", e + " " + t
+    ):
         return "contract"
     if "permanent" in e:
         return "permanent"
@@ -687,6 +690,7 @@ async def collect(archive_page=9, tracked=None):
             scholarships(client),
             mining(client),
             *ghana_sources.tasks(client, archive_page),
+            *employer_sources.tasks(client),
         ]
         names = [
             *["smart:" + b for b in SMART],
@@ -694,6 +698,7 @@ async def collect(archive_page=9, tracked=None):
             "scholarships-authority",
             "anglogold",
             *ghana_sources.SOURCE_NAMES,
+            *employer_sources.SOURCE_NAMES,
         ]
         result = await asyncio.gather(
             *(asyncio.wait_for(task, 130) for task in tasks), return_exceptions=True
@@ -860,6 +865,7 @@ def catalogue_sources():
     state = rows[0] if rows else {}
     health = {x["source"]: x for x in state.get("summary", [])}
     registry = dict(ghana_sources.SOURCE_INFO)
+    registry.update(employer_sources.SOURCE_INFO)
     for board in SMART:
         registry["smart:" + board] = (
             board.replace("Deloitte6", "Deloitte")
@@ -1090,6 +1096,8 @@ async def catalogue_details(job_id: str, verify: bool = False):
             "www.glmis.gov.gh",
             "jobs.newmont.com",
             "telecel.zohorecruit.com",
+            "api.ashbyhq.com",
+            "gh.fido.money",
         ]
     ):
         try:
@@ -1097,6 +1105,28 @@ async def catalogue_details(job_id: str, verify: bool = False):
                 timeout=10, follow_redirects=True, headers=HEADERS
             ) as client:
                 r = await client.get(check)
+                if host in ["api.ashbyhq.com", "gh.fido.money"]:
+                    if r.status_code != 200:
+                        raise HTTPException(
+                            503,
+                            "The employer could not confirm this opportunity. Please try again later.",
+                        )
+                    fresh = await employer_sources.recheck(client, j, r)
+                    if fresh is None:
+                        supabase.table("job_catalogue").update({"status": "closed"}).eq(
+                            "id", job_id
+                        ).execute()
+                        raise HTTPException(
+                            410,
+                            "The employer no longer lists this Ghana opportunity as open.",
+                        )
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
             if r.status_code in [404, 410]:
                 supabase.table("job_catalogue").update({"status": "closed"}).eq(
                     "id", job_id

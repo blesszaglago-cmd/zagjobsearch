@@ -10,6 +10,16 @@ AngloGold Ashanti's Ghana career pages require Ghana metadata and a recognised G
 
 Supported sources do not mean complete national/industry coverage. Empty boards contribute zero results. Internships, graduate programmes and apprenticeships enter Early careers when eligible current postings exist. Empty tabs are never populated with invented opportunities. Jobberman is excluded: its terms require written approval for automated extraction (https://www.jobberman.com.gh/terms).
 
+### Direct employer expansion, 22 October 2026
+
+`backend/employer_sources.py` adds M-KOPA's published Ashby feed and Fido's official careers index. They use the existing protected refresh, per-host concurrency bounds, deduplication, source-status endpoint and external Apply flow. No paid API, credential or schema change is needed. See the [coverage plan](listing-coverage-plan.md) for the measured baseline and next source priorities.
+
+M-KOPA eligibility checks the primary and secondary work addresses. An explicitly listed Ghana location qualifies even when another country's address is primary. Unlisted postings are excluded. Towns explicitly supplied in a role-title suffix, such as Hohoe-Dambai, can supply work locations when the feed otherwise names only Ghana; employer headquarters are never used as a substitute. Hybrid roles stay outside the fully remote category. Fixed-term `FTC` titles classify as contracts. Ashby's last-published timestamp is labelled as a source update rather than an original publication date.
+
+Fido vacancies must appear in the current official index and name Ghana in their work locations. Each detail page must supply role text and an individual application link on Fido's own recruitment host. National-service roles enter Early careers. Unpublished dates, closing dates and salaries remain unknown.
+
+Apply rechecks each employer's current index. A complete index confirming removal closes the record; an unavailable, malformed or redirected feed remains a failed check, not proof of closure. Fido also reloads the individual detail to obtain the current application URL. Both readers participate in automatic refreshes and source-health monitoring.
+
 ### Ghana source expansion
 
 `backend/ghana_sources.py` adds five public readers, without paid APIs or credentials:
