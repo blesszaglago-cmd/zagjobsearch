@@ -1,6 +1,6 @@
 # Operating jobs.ac.ghana
 
-Updated 20 October 2026. The public address is https://zagjobsearch.vercel.app; jobs.ac.ghana is the product name, not a claimed registered domain. No subscription, paid API, plan upgrade or payment processing is introduced by this release.
+Updated 22 October 2026. The public address is https://zagjobsearch.vercel.app; jobs.ac.ghana is the product name, not a claimed registered domain. No subscription, paid API, plan upgrade or payment processing is introduced by this release.
 
 ## Release and verification
 
@@ -67,12 +67,25 @@ A future sender or credential change requires a fresh owner-requested inbox chec
 On 21 October 2026, the owner corrected the Gmail client secret and the backend was redeployed from reviewed commit `efb144a`. Both Gmail credentials remain Production-only Vercel Secrets. The private authentication probe returned `configured: true` and `authenticated: true`. A fresh password-reset email reached the owner's inbox; the owner reset the password and logged in with it. A read-only database check confirmed the latest reset token was marked used, no reset links remained active for that account, the email was verified and the outbox recorded the message as sent. The owner confirmed storing the client secret and refresh token as separate password-manager entries. No credential values are included in this record. Duplicate token submission, standalone signup verification and reminder/alert inbox delivery still require separate checks. Google branding approval and visitor Google sign-in are not established by this sender test.
 
 A later verification request failed with `gmail_api_authentication_failed (400)`;
-a fresh private probe reproduced it with unchanged environment metadata. The exact
-OAuth error requires the allowlisted diagnostic before selecting a credential fix.
-Do not infer a specific cause from HTTP 400 alone. Current delivery is blocked;
-after recovery, repeat an owner-requested inbox check rather than resending expired
-links. Google documents token endpoint errors at
+a fresh private probe reproduced it with unchanged environment metadata. The
+allowlisted diagnostic subsequently identified `invalid_grant`; the reason the old
+grant became invalid remains unknown. Do not infer a specific cause from HTTP 400
+alone. Google documents token endpoint errors at
 https://developers.google.com/identity/openid-connect/reference.
+
+On 22 October, the owner obtained a fresh refresh token using their own OAuth
+credentials and updated the Production-only Vercel Secret. The first redeployment
+returned `invalid_client`. After the owner updated the Production-only client
+secret to match the successful Playground exchange, a redeployment from reviewed
+commit `a4919bf` passed the private authentication check. A fresh owner-requested
+verification email reached the inbox and the site confirmed successful verification.
+A boolean-only database check confirmed the address was verified, the latest
+verification link was recently marked used, no verification links remained active
+for that account and the outbox recorded the email as sent. No credential or
+account-link values are included in this record. This covers an existing owner's
+verification flow; new-account signup, duplicate token submission and opted-in
+reminder/alert inbox delivery still need separate checks. Google branding and
+visitor Google sign-in remain separate work.
 
 Official transport references: https://developers.google.com/workspace/gmail/api/guides/sending and https://developers.google.com/identity/protocols/oauth2/web-server.
 
