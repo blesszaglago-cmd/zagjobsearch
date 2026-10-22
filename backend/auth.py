@@ -3,6 +3,7 @@
 import hashlib
 import secrets
 import hmac
+import logging
 from datetime import date
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from fastapi import HTTPException
@@ -10,6 +11,7 @@ from database.supabase_client import supabase
 from sessions import issue_session
 
 ITERATIONS = 600_000
+logger = logging.getLogger(__name__)
 
 
 class SignupRequest(BaseModel):
@@ -156,6 +158,7 @@ def validate_signup(data):
         )
     from mailer import email_enabled
 
+    verification_required = email_enabled()
     result = (
         supabase.table("profiles")
         .insert(
@@ -165,18 +168,29 @@ def validate_signup(data):
                 "country": data.country.upper(),
                 "date_of_birth": None,
                 "password_hash": hash_password(data.password),
-                "requires_verification": email_enabled(),
+                "requires_verification": verification_required,
             }
         )
         .execute()
     )
     user = result.data[0]
     message = "Account created. You can now log in."
-    if email_enabled():
+    if verification_required:
         from account_security import send_account_link
 
-        send_account_link(user, "verify")
-        message = "Account created. Check your email to verify it before logging in."
+        try:
+            send_account_link(user, "verify")
+        except Exception:
+            # The profile already exists. Keep verification required and explain
+            # recovery without logging provider replies, addresses or tokens.
+            logger.warning("signup_verification_delivery_failed")
+            message = (
+                "Account created, but we couldn't confirm delivery of your verification email. "
+                "Check your inbox and spam folder, or use 'Forgot password or verify email' "
+                "to request a new link before logging in."
+            )
+        else:
+            message = "Account created. Check your inbox and spam folder to verify your email before logging in."
     return SignupResponse(
         user_id=user["id"],
         email=user["email"],

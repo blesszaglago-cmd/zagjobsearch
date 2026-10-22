@@ -178,11 +178,15 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                   required
                   minLength={mode === "login" ? 1 : 8}
                   maxLength={128}
+                  aria-describedby={mode === "login" ? undefined : "password-hint"}
                   value={form.password}
                   onChange={(e) =>
                     setForm({ ...form, password: e.target.value })
                   }
                 />
+                {mode !== "login" && (
+                  <small id="password-hint">Use at least 8 characters.</small>
+                )}
               </label>
             )}
             {(mode === "signup" || mode === "reset") && (
@@ -273,7 +277,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         <nav className="auth-links" aria-label="Account options">
           {mode !== "login" && <Link href="/login">Log in</Link>}
           {mode !== "signup" && <Link href="/signup">Create account</Link>}
-          {mode === "login" && (
+          {(mode === "login" || mode === "signup") && (
             <Link href="/forgot-password">Forgot password or verify email</Link>
           )}
           <Link href="/search">Continue searching</Link>

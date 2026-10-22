@@ -59,6 +59,7 @@ test("account changes reject a different website origin before calling the backe
     method: "POST", headers: { origin: "https://untrusted.example", cookie: "zag_session=test-only" }, body: "{}",
   }), { params: Promise.resolve({ path: ["applications"] }) });
   assert.equal(response.status, 403);
+  assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(calls, 0);
 });
 
@@ -70,8 +71,23 @@ test("protected account reads reject guests without querying the backend", async
       params: Promise.resolve({ path: [path] }),
     });
     assert.equal(response.status, 401);
+    assert.equal(response.headers.get("cache-control"), "no-store");
   }
   assert.equal(calls, 0);
+});
+
+test("account upstream failures remain private and cannot be cached", async () => {
+  const route = loadRoute("../app/api/account/[...path]/route.ts", async () => {
+    throw Error("test-only-private-provider-detail");
+  });
+  const response = await route.POST(new NextRequest("https://site.example/api/account/signup", {
+    method: "POST", headers: { origin: "https://site.example", "content-type": "application/json" }, body: "{}",
+  }), { params: Promise.resolve({ path: ["signup"] }) });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), {
+    detail: "Account service is unavailable. Please try again shortly.",
+  });
 });
 
 test("login keeps its session token in a secure HttpOnly cookie", async () => {
