@@ -46,15 +46,26 @@ Signup now includes the recovery link and a visible eight-character password
 hint. All responses returned by the account proxy explicitly use `no-store`,
 including early errors and redirects. Origin and session checks remain enforced.
 
+The fresh release security job flagged Next.js 16.3.8 against three advisories
+added to the GitHub Advisory Database on 22 October: GHSA-2464-fhr4-w9xw,
+GHSA-p3m5-59mp-jv5r and GHSA-673q-mjm6-r5xr. The installed version is in their
+affected ranges; this is not evidence of an actual exploit or the reported
+visitor's signup failure. Next.js and its matching ESLint configuration are now
+pinned to 16.4.2, with a regenerated lockfile. The maintainer's
+[16.4.1 security release](https://github.com/vercel/next.js/releases/tag/v16.4.1)
+contains the fixes; [16.4.2](https://github.com/vercel/next.js/releases/tag/v16.4.2)
+includes that release's fixes and subsequent maintenance changes.
+The runtime dependency audit then returned zero known vulnerabilities.
+
 Seven frontend security regressions passed locally, including upstream failure
 privacy and early-response cache assertions. ESLint completed with zero errors
 and five existing navigation warnings. The webpack production build and TypeScript
 checks passed. Changed Python files passed syntax parsing. The local Python
-environment lacks the full backend test dependencies; the release PR's backend,
-frontend, dependency audit and isolated PostgreSQL restore CI checks must pass
-before merging. The deployed base release's backend CI ran 90 tests with four
-skipped; its isolated restore job ran 14 successfully. These overlapping batches
-are not added together as unique tests.
+environment lacks the full backend test dependencies. Backend CI ran 94 tests
+with four skipped, including the four added signup regressions; the isolated
+PostgreSQL restore job ran 14 successfully. These overlapping batches are not
+added together as unique tests. The final release PR's backend, frontend,
+dependency audit and isolated restore checks must all pass before merging.
 
 ## Remaining limits
 
