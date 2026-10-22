@@ -20,6 +20,8 @@ type Event = {
 };
 export default function Tracker() {
   const selection = useRef(0);
+  const editorRef = useRef<HTMLElement>(null);
+  const [editorRequest, setEditorRequest] = useState(0);
   const [undo, setUndo] = useState(""),
     [emailReady, setEmailReady] = useState(false);
   const [items, setItems] = useState<Application[]>([]),
@@ -61,6 +63,18 @@ export default function Tracker() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    if (!editorRequest || loading || !signedIn) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus({ preventScroll: true });
+    editor.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+      block: "start",
+    });
+  }, [editorRequest, loading, signedIn]);
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!edit) return;
@@ -101,6 +115,7 @@ export default function Tracker() {
     const id = ++selection.current;
     setEdit(item);
     setEvents([]);
+    setEditorRequest((request) => request + 1);
     if (item.id)
       accountRequest(`applications/${item.id}/events`)
         .then((d) => {
@@ -132,11 +147,11 @@ export default function Tracker() {
           </div>
           {signedIn && (
             <button
+              type="button"
               className="btn-primary"
-              onClick={() => {
-                setEdit({ ...blankApplication });
-                setEvents([]);
-              }}
+              aria-expanded={edit !== null}
+              aria-controls={edit ? "application-editor" : undefined}
+              onClick={() => select({ ...blankApplication })}
             >
               Add application +
             </button>
@@ -286,9 +301,15 @@ export default function Tracker() {
               )}
             </div>
             {edit && (
-              <section className="application-editor">
+              <section
+                id="application-editor"
+                className="application-editor"
+                ref={editorRef}
+                tabIndex={-1}
+                aria-labelledby="application-editor-title"
+              >
                 <div className="editor-heading">
-                  <h2>
+                  <h2 id="application-editor-title">
                     {edit.id ? "Application details" : "Add an application"}
                   </h2>
                   <button className="btn-outline" onClick={() => setEdit(null)}>

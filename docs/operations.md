@@ -83,7 +83,11 @@ A boolean-only database check confirmed the address was verified, the latest
 verification link was recently marked used, no verification links remained active
 for that account and the outbox recorded the email as sent. No credential or
 account-link values are included in this record. This covers an existing owner's
-verification flow; new-account signup, duplicate token submission and opted-in
+verification flow. A later owner-performed Incognito check on 22 October confirmed
+new-account signup, refusal to log in before verification, successful verification
+and subsequent login to the tracker. A boolean-only database check confirmed the
+new verification link was used, no verification links remained active, the address
+was verified and its email was marked sent. Duplicate token submission and opted-in
 reminder/alert inbox delivery still need separate checks. Google branding and
 visitor Google sign-in remain separate work.
 

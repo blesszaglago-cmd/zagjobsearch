@@ -14,7 +14,7 @@ Production: https://zagjobsearch.vercel.app. Original audit release: PR #11, com
 | 8. Broken Google sign-in | Backend identity validation and PKCE/state callback implemented; unavailable button hidden. Google provider credentials remain owner setup. |
 | 9. Blank OAuth errors | Fixed: actual error state is rendered. |
 | 10. Password reset | Hashed expiring single-use links and rate limits implemented. Owner inbox delivery, reset and subsequent login passed on 21 October; the used-link state was confirmed. Gmail authentication and fresh verification delivery passed again on 22 October after updating the sender credentials. |
-| 11. Email verification | Implemented; opted-in emails require a verified address. A fresh verification message reached the owner's inbox on 22 October, the owner completed verification and a boolean database check confirmed the link was used and the message marked sent. New-account signup verification remains a separate check. |
+| 11. Email verification | Implemented; opted-in emails require a verified address. Existing-account verification and a separate new-account signup/verification/login flow passed on 22 October. Login was blocked before verification; boolean database checks confirmed verification links were used and messages marked sent. |
 | 12. Account management | Settings, password/email changes, CSV export, deletion and legacy-text removal added. Core live flows passed. Email changes require delivery. |
 | 13. Repeated authentication attempts | Database-backed IP/account rate budgets added. |
 | 14. Password work factor | New hashes use 600,000 PBKDF2-SHA256 iterations; legacy hashes upgrade on login. |
@@ -73,9 +73,11 @@ Later that evening, an owner verification request failed before sending: the out
 
 On 22 October, the owner obtained a fresh refresh token using their own OAuth credentials and updated the Production-only Vercel Secret. An initial redeployment returned `invalid_client`. After the owner aligned the saved client secret with the successful Playground exchange, a redeployment from reviewed commit `a4919bf` returned `configured: true` and `authenticated: true`. A fresh owner-requested verification email reached the inbox, and the owner completed verification on the site. A boolean-only database check confirmed the address was verified, the latest verification link was recently marked used, no verification links remained active for that account and the outbox recorded the message as sent. No credential or account-link values are included in this record. This checks verification for an existing owner account; new-account signup and opted-in reminder/alert inbox delivery remain separate checks.
 
+Later on 22 October, the owner created a separate account in an Incognito window. Screenshots show successful signup, refusal to log in before verification, successful verification and the signed-in tracker. The owner confirmed successful login. A boolean-only database check confirmed the new address was verified, its latest verification link was recently used, no verification links remained active and the outbox marked its verification email sent. This completes the new-account signup/verification/login check; reminder/alert delivery and duplicate token submission remain separate checks.
+
 ## Still dependent on access, permission or outside systems
 
-- New-account signup verification and opted-in reminder/alert inbox checks. Gmail authentication and an existing owner account's verification email and completion passed on 22 October. Future sender changes require fresh authentication and inbox checks.
+- Opted-in reminder/alert inbox checks and duplicate token submission. Gmail authentication, existing-account verification and a separate new-account signup/verification/login flow passed on 22 October. Future sender changes require fresh authentication and inbox checks.
 - Google sign-in provider configuration and Google branding verification. Sender consent does not establish public app approval.
 - Search ownership, sitemap reads and homepage indexing are confirmed in Google and Bing. Bing read 223 sitemap URLs on 21 October. Search ranking is not guaranteed.
 - Restricted-source feeds or publisher agreements; full national/worldwide coverage is not claimed.
