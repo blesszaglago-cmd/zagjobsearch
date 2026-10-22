@@ -15,7 +15,7 @@ function loadRoute(relative, fetchImpl = async () => { throw Error("Unexpected u
   const code = ts.transpileModule(readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const module = { exports: {} };
+  const routeModule = { exports: {} };
   const localRequire = (id) => {
     if (id === "server-only") return {};
     if (id === "@/lib/api") return { API_URL: "https://backend.example" };
@@ -23,11 +23,11 @@ function loadRoute(relative, fetchImpl = async () => { throw Error("Unexpected u
     return require(id);
   };
   vm.runInNewContext(code, {
-    require: localRequire, module, exports: module.exports, fetch: fetchImpl,
+    require: localRequire, module: routeModule, exports: routeModule.exports, fetch: fetchImpl,
     process: { env: { NODE_ENV: "production", CRON_SECRET: secret, ...env } },
     Buffer, AbortSignal, Response, URL,
   }, { filename });
-  return module.exports;
+  return routeModule.exports;
 }
 
 test("cron verification rejects malformed headers and missing configuration", () => {
