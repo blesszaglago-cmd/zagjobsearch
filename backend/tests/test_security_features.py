@@ -146,6 +146,98 @@ class AuthenticationTests(unittest.TestCase):
         self.assertEqual(result["access_token"], "signed-session")
 
 
+class SignupDeliveryTests(unittest.TestCase):
+    def setUp(self):
+        self.data = auth.SignupRequest(
+            full_name="Test Applicant",
+            email="test-applicant@example.com",
+            password="test-only-password",
+            confirm_password="test-only-password",
+            accepted_terms=True,
+            age_confirmed=True,
+        )
+        self.db = MagicMock()
+
+        def insert(record):
+            return types.SimpleNamespace(
+                execute=lambda: types.SimpleNamespace(
+                    data=[{"id": "test-applicant", **record}]
+                )
+            )
+
+        self.db.table.return_value.insert.side_effect = insert
+        for mocked in [
+            patch.object(auth, "supabase", self.db),
+            patch.object(auth, "hash_password", return_value="test-only-hash"),
+        ]:
+            mocked.start()
+            self.addCleanup(mocked.stop)
+        find_patch = patch.object(auth, "find_email", return_value=None)
+        self.find = find_patch.start()
+        self.addCleanup(find_patch.stop)
+
+    def test_success_requires_verification_before_login(self):
+        with patch.object(mailer, "email_enabled", return_value=True) as enabled, patch.object(
+            account_security, "send_account_link"
+        ) as send:
+            result = auth.validate_signup(self.data)
+        enabled.assert_called_once_with()
+        send.assert_called_once()
+        self.assertEqual(send.call_args.args[1], "verify")
+        self.assertTrue(send.call_args.args[0]["requires_verification"])
+        self.assertIn("Check your inbox and spam folder", result.message)
+        self.assertNotIn("access_token", result.model_dump())
+
+    def test_failed_delivery_acknowledges_creation_and_keeps_login_blocked(self):
+        for failure in [
+            HTTPException(503, "test-only-private-provider-detail"),
+            RuntimeError("test-only-private-token-detail"),
+        ]:
+            with self.subTest(failure=type(failure).__name__):
+                self.db.reset_mock()
+                self.find.return_value = None
+                with patch.object(mailer, "email_enabled", return_value=True), patch.object(
+                    account_security, "send_account_link", side_effect=failure
+                ), self.assertLogs("auth", level="WARNING") as logs:
+                    result = auth.validate_signup(self.data)
+                self.db.table.return_value.insert.assert_called_once()
+                record = self.db.table.return_value.insert.call_args.args[0]
+                self.assertTrue(record["requires_verification"])
+                self.assertIn("Account created", result.message)
+                self.assertIn("couldn't confirm delivery", result.message)
+                self.assertIn("Forgot password or verify email", result.message)
+                self.assertNotIn("access_token", result.model_dump())
+                self.assertEqual(logs.output, ["WARNING:auth:signup_verification_delivery_failed"])
+                self.assertNotIn("test-only-private", str(result))
+                self.find.return_value = {"id": "test-applicant", **record}
+                with patch.object(auth, "verify_password", return_value=True), patch.object(
+                    auth, "issue_session"
+                ) as issue:
+                    with self.assertRaises(HTTPException) as error:
+                        auth.login_user(
+                            auth.LoginRequest(email=self.data.email, password=self.data.password)
+                        )
+                    self.assertEqual(error.exception.status_code, 403)
+                    issue.assert_not_called()
+
+    def test_unconfigured_email_preserves_password_signup_without_sending(self):
+        with patch.object(mailer, "email_enabled", return_value=False), patch.object(
+            account_security, "send_account_link"
+        ) as send:
+            result = auth.validate_signup(self.data)
+        send.assert_not_called()
+        self.assertFalse(self.db.table.return_value.insert.call_args.args[0]["requires_verification"])
+        self.assertEqual(result.message, "Account created. You can now log in.")
+
+    def test_existing_account_uses_recovery_without_another_insert(self):
+        self.find.return_value = {"id": "test-applicant"}
+        with patch.object(account_security, "send_account_link") as send:
+            with self.assertRaisesRegex(ValueError, "Log in or recover your account"):
+                auth.validate_signup(self.data)
+        self.db.table.assert_not_called()
+        send.assert_not_called()
+
+
 class ReminderTests(unittest.TestCase):
     def test_deadline_changes_update_automatic_reminders(self):
         record = workspace_api.Application(

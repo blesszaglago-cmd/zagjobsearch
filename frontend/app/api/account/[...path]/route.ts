@@ -199,7 +199,15 @@ async function handle(
     );
   }
 }
-export const GET = handle;
-export const POST = handle;
-export const PUT = handle;
-export const DELETE = handle;
+async function accountHandler(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
+  const response = await handle(request, context);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+export const GET = accountHandler;
+export const POST = accountHandler;
+export const PUT = accountHandler;
+export const DELETE = accountHandler;
