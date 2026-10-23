@@ -58,10 +58,6 @@ class SignupRequest(BaseModel):
 
 
 class SignupResponse(BaseModel):
-    user_id: str
-    email: str
-    full_name: str
-    country: str
     message: str
 
 
@@ -140,7 +136,9 @@ def login_user(data):
     if not user["password_hash"].startswith(f"pbkdf2_sha256${ITERATIONS}$"):
         supabase.table("profiles").update(
             {"password_hash": hash_password(data.password)}
-        ).eq("id", user["id"]).execute()
+        ).eq("id", user["id"]).eq("password_hash", user["password_hash"]).eq(
+            "session_version", user.get("session_version", 1)
+        ).execute()
     return LoginResponse(
         access_token=issue_session(user["id"], user.get("session_version", 1)),
         user_id=user["id"],
@@ -152,13 +150,20 @@ def login_user(data):
 
 
 def validate_signup(data):
-    if find_email(data.email):
-        raise ValueError(
-            "An account with this email already exists. Log in or recover your account."
-        )
     from mailer import email_enabled
 
     verification_required = email_enabled()
+    message = (
+        "Check your inbox and spam folder for the next steps. If no message arrives, "
+        "use 'Forgot password or verify email' to recover your account or request a new link."
+        if verification_required
+        else "Try logging in with your password. If you already have an account, use your existing password or account recovery."
+    )
+    # Do the same hashing work for existing addresses, and return the same public
+    # response without exposing whether a mailbox already owns a workspace.
+    password_hash = hash_password(data.password)
+    if find_email(data.email):
+        return SignupResponse(message=message)
     result = (
         supabase.table("profiles")
         .insert(
@@ -167,14 +172,13 @@ def validate_signup(data):
                 "full_name": data.full_name.strip(),
                 "country": data.country.upper(),
                 "date_of_birth": None,
-                "password_hash": hash_password(data.password),
+                "password_hash": password_hash,
                 "requires_verification": verification_required,
             }
         )
         .execute()
     )
     user = result.data[0]
-    message = "Account created. You can now log in."
     if verification_required:
         from account_security import send_account_link
 
@@ -184,17 +188,4 @@ def validate_signup(data):
             # The profile already exists. Keep verification required and explain
             # recovery without logging provider replies, addresses or tokens.
             logger.warning("signup_verification_delivery_failed")
-            message = (
-                "Account created, but we couldn't confirm delivery of your verification email. "
-                "Check your inbox and spam folder, or use 'Forgot password or verify email' "
-                "to request a new link before logging in."
-            )
-        else:
-            message = "Account created. Check your inbox and spam folder to verify your email before logging in."
-    return SignupResponse(
-        user_id=user["id"],
-        email=user["email"],
-        full_name=user["full_name"],
-        country=user["country"],
-        message=message,
-    )
+    return SignupResponse(message=message)

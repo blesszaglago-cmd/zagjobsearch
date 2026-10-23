@@ -122,15 +122,14 @@ class AuthenticationTests(unittest.TestCase):
             email="original@example.com",
             email_confirmed_at="2026-10-20",
             app_metadata={"providers": ["google"]},
+            user_metadata={"full_name": "Test owner"},
         )
-        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
-            {
-                "id": "workspace-owner",
-                "email": "changed@example.com",
-                "session_version": 3,
-                "onboarding_complete": True,
-            }
-        ]
+        db.rpc.return_value.execute.return_value.data = {
+            "id": "workspace-owner",
+            "email": "changed@example.com",
+            "session_version": 3,
+            "onboarding_complete": True,
+        }
         with patch.object(account_security, "supabase", db), patch.object(
             account_security, "rate_limit"
         ), patch.object(account_security, "find_email") as find, patch.object(
@@ -177,9 +176,9 @@ class SignupDeliveryTests(unittest.TestCase):
         self.addCleanup(find_patch.stop)
 
     def test_success_requires_verification_before_login(self):
-        with patch.object(mailer, "email_enabled", return_value=True) as enabled, patch.object(
-            account_security, "send_account_link"
-        ) as send:
+        with patch.object(
+            mailer, "email_enabled", return_value=True
+        ) as enabled, patch.object(account_security, "send_account_link") as send:
             result = auth.validate_signup(self.data)
         enabled.assert_called_once_with()
         send.assert_called_once()
@@ -196,26 +195,33 @@ class SignupDeliveryTests(unittest.TestCase):
             with self.subTest(failure=type(failure).__name__):
                 self.db.reset_mock()
                 self.find.return_value = None
-                with patch.object(mailer, "email_enabled", return_value=True), patch.object(
+                with patch.object(
+                    mailer, "email_enabled", return_value=True
+                ), patch.object(
                     account_security, "send_account_link", side_effect=failure
-                ), self.assertLogs("auth", level="WARNING") as logs:
+                ), self.assertLogs(
+                    "auth", level="WARNING"
+                ) as logs:
                     result = auth.validate_signup(self.data)
                 self.db.table.return_value.insert.assert_called_once()
                 record = self.db.table.return_value.insert.call_args.args[0]
                 self.assertTrue(record["requires_verification"])
-                self.assertIn("Account created", result.message)
-                self.assertIn("couldn't confirm delivery", result.message)
+                self.assertIn("Check your inbox and spam folder", result.message)
                 self.assertIn("Forgot password or verify email", result.message)
                 self.assertNotIn("access_token", result.model_dump())
-                self.assertEqual(logs.output, ["WARNING:auth:signup_verification_delivery_failed"])
+                self.assertEqual(
+                    logs.output, ["WARNING:auth:signup_verification_delivery_failed"]
+                )
                 self.assertNotIn("test-only-private", str(result))
                 self.find.return_value = {"id": "test-applicant", **record}
-                with patch.object(auth, "verify_password", return_value=True), patch.object(
-                    auth, "issue_session"
-                ) as issue:
+                with patch.object(
+                    auth, "verify_password", return_value=True
+                ), patch.object(auth, "issue_session") as issue:
                     with self.assertRaises(HTTPException) as error:
                         auth.login_user(
-                            auth.LoginRequest(email=self.data.email, password=self.data.password)
+                            auth.LoginRequest(
+                                email=self.data.email, password=self.data.password
+                            )
                         )
                     self.assertEqual(error.exception.status_code, 403)
                     issue.assert_not_called()
@@ -226,14 +232,17 @@ class SignupDeliveryTests(unittest.TestCase):
         ) as send:
             result = auth.validate_signup(self.data)
         send.assert_not_called()
-        self.assertFalse(self.db.table.return_value.insert.call_args.args[0]["requires_verification"])
-        self.assertEqual(result.message, "Account created. You can now log in.")
+        self.assertFalse(
+            self.db.table.return_value.insert.call_args.args[0]["requires_verification"]
+        )
+        self.assertIn("Try logging in", result.message)
 
     def test_existing_account_uses_recovery_without_another_insert(self):
         self.find.return_value = {"id": "test-applicant"}
         with patch.object(account_security, "send_account_link") as send:
-            with self.assertRaisesRegex(ValueError, "Log in or recover your account"):
-                auth.validate_signup(self.data)
+            result = auth.validate_signup(self.data)
+        self.assertIn("account", result.message)
+        self.assertEqual(set(result.model_dump()), {"message"})
         self.db.table.assert_not_called()
         send.assert_not_called()
 

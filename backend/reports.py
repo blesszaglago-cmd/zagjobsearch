@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from database.supabase_client import supabase
 from security import rate_limit
+import re
 
 router = APIRouter()
 
@@ -14,6 +15,8 @@ class Report(BaseModel):
 
 @router.post("/catalogue/{job_id}/report")
 def report(job_id: str, data: Report, request: Request):
+    if not re.fullmatch("[a-f0-9]{32}", job_id):
+        raise HTTPException(404, "Listing not found")
     rate_limit(request, "listing-report", limit=10, seconds=86400)
     if (
         not supabase.table("job_catalogue")

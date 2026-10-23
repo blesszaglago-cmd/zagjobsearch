@@ -127,8 +127,10 @@ class CoverageTests(unittest.IsolatedAsyncioTestCase):
         client = AsyncMock()
         client.get.return_value = response
         with patch.object(c, "supabase", db), patch.object(
-            c.httpx, "AsyncClient"
-        ) as factory:
+            c, "source_client"
+        ) as factory, patch.object(
+            c, "PublicSourceClient", side_effect=lambda client: client
+        ):
             factory.return_value.__aenter__.return_value = client
             with self.assertRaises(HTTPException) as error:
                 await c.catalogue_details(job["id"], verify=True)

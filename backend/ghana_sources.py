@@ -127,8 +127,19 @@ FOREIGN_LOCATION = re.compile(
 
 
 def on_host(url, host):
-    parsed = urlparse(url)
-    return parsed.scheme == "https" and parsed.hostname == host and not parsed.username
+    try:
+        parsed = urlparse(url)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == host
+            and not parsed.username
+            and parsed.port in (None, 443)
+            and not parsed.fragment
+            and not any(ord(c) < 33 for c in url)
+            and "\\" not in url
+        )
+    except ValueError:
+        return False
 
 
 def ghana_location(location):

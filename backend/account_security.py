@@ -5,6 +5,7 @@ import hashlib
 import io
 import os
 import secrets
+import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -49,6 +50,7 @@ def send_account_link(user, purpose, target=None):
             "token_hash": digest,
             "user_id": user["id"],
             "purpose": purpose,
+            "issued_session_version": user.get("session_version", 1),
             "target_email": email,
             "expires_at": (
                 datetime.now(timezone.utc) + timedelta(minutes=30)
@@ -95,9 +97,12 @@ def recovery(data: EmailRequest, request: Request):
         )
     user = find_email(data.email)
     if user:
-        send_account_link(user, data.purpose)
+        try:
+            send_account_link(user, data.purpose)
+        except Exception:
+            logging.getLogger(__name__).warning("account_recovery_delivery_deferred")
     return {
-        "message": "If an account matches that address, a link has been sent. Check your inbox and spam folder."
+        "message": "If an account matches, check your inbox and spam folder for the next steps. If no email arrives, try again shortly or contact support."
     }
 
 
@@ -160,44 +165,31 @@ def google(data: GoogleRequest, request: Request):
         raise HTTPException(
             401, "Google could not confirm your identity. Please sign in again."
         )
-    # A verified email change must not create a second workspace the next time
-    # the same Google identity signs in with its original provider address.
-    linked = (
-        supabase.table("profiles")
-        .select("*")
-        .eq("auth_user_id", str(user.id))
-        .limit(1)
-        .execute()
-        .data
-    )
-    existing = linked[0] if linked else find_email(user.email)
-    if existing:
-        supabase.table("profiles").update(
-            {
-                "email_verified_at": datetime.now(timezone.utc).isoformat(),
-                "requires_verification": False,
-                "auth_user_id": str(user.id),
-            }
-        ).eq("id", existing["id"]).execute()
-    else:
+    # Identity binding and removal of any unverified password happen in one
+    # transaction. Never promote a mailbox claimant's password to a verified login.
+    try:
         existing = (
-            supabase.table("profiles")
-            .insert(
+            supabase.rpc(
+                "bind_google_account",
                 {
-                    "email": user.email.casefold(),
-                    "full_name": (user.user_metadata or {}).get("full_name")
-                    or "Job seeker",
-                    "country": "GH",
-                    "date_of_birth": None,
-                    "password_hash": "!google:" + secrets.token_hex(32),
-                    "auth_user_id": str(user.id),
-                    "email_verified_at": datetime.now(timezone.utc).isoformat(),
-                    "onboarding_complete": False,
-                }
+                    "provider_id": str(user.id),
+                    "verified_email": user.email,
+                    "display_name": str(
+                        (user.user_metadata or {}).get("full_name") or "Job seeker"
+                    )[:100],
+                    "unusable_password_hash": "!google:" + secrets.token_hex(32),
+                },
             )
             .execute()
-            .data[0]
+            .data
         )
+    except Exception:
+        raise HTTPException(
+            409,
+            "This Google account could not be linked safely. Recover your account or contact support.",
+        )
+    if not existing:
+        raise HTTPException(503, "Google sign-in is temporarily unavailable.")
     return {
         "access_token": issue_session(
             existing["id"], existing.get("session_version", 1)
@@ -206,12 +198,34 @@ def google(data: GoogleRequest, request: Request):
     }
 
 
+def rotate_session(
+    user, credentials, expected_password_hash=None, replacement_password_hash=None
+):
+    version = (
+        supabase.rpc(
+            "rotate_account_session",
+            {
+                "owner_id": user,
+                "request_version": session_payload(credentials.credentials).get("v", 1),
+                "expected_password_hash": expected_password_hash,
+                "replacement_password_hash": replacement_password_hash,
+            },
+        )
+        .execute()
+        .data
+    )
+    if not version:
+        raise HTTPException(
+            401, "Your account changed during this request. Please log in again."
+        )
+
+
 @router.post("/account/logout")
-def logout(user=Depends(current_user)):
-    p = profile(user)
-    supabase.table("profiles").update({"session_version": p["session_version"] + 1}).eq(
-        "id", user
-    ).execute()
+def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    user=Depends(current_user),
+):
+    rotate_session(user, credentials)
     return {"logged_out": True}
 
 
@@ -252,19 +266,16 @@ class PasswordChange(BaseModel):
 
 
 @router.post("/account/password")
-def change_password(data: PasswordChange, request: Request, user=Depends(current_user)):
+def change_password(
+    data: PasswordChange,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    user=Depends(current_user),
+):
     rate_limit(request, "change-password", user, 5)
     p = profile(user)
     require_password(p, data.current_password)
-    supabase.table("profiles").update(
-        {
-            "password_hash": hash_password(data.password),
-            "session_version": p["session_version"] + 1,
-        }
-    ).eq("id", user).execute()
-    supabase.table("account_tokens").update(
-        {"used_at": datetime.now(timezone.utc).isoformat()}
-    ).eq("user_id", user).is_("used_at", "null").execute()
+    rotate_session(user, credentials, p["password_hash"], hash_password(data.password))
     return {"message": "Password changed. Log in with your new password."}
 
 

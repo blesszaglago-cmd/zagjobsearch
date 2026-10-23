@@ -302,8 +302,8 @@ class AcademicSourceTests(unittest.IsolatedAsyncioTestCase):
         context.__aenter__ = AsyncMock(return_value=client)
         context.__aexit__ = AsyncMock(return_value=False)
         with patch.object(c, "supabase", db), patch.object(
-            c.httpx, "AsyncClient", return_value=context
-        ):
+            c, "source_client", return_value=context
+        ), patch.object(c, "PublicSourceClient", side_effect=lambda client: client):
             fresh = await c.catalogue_details(job["id"], verify=True)
             self.assertFalse(fresh["can_apply"])
             self.assertEqual(fresh["listing_status"], "closed")
