@@ -196,7 +196,11 @@ class AccountDatabaseTests(unittest.TestCase):
             )
 
     def run_concurrently_behind_profile_lock(self, operations):
-        with self.connect() as blocker, ThreadPoolExecutor(max_workers=2) as pool:
+        with (
+            self.connect() as blocker,
+            self.connect() as observer,
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
             blocker.execute("begin")
             blocker.execute(
                 "select id from public.profiles where id=%s for update", (self.owner,)
@@ -205,7 +209,9 @@ class AccountDatabaseTests(unittest.TestCase):
             try:
                 deadline = time.monotonic() + 5
                 while time.monotonic() < deadline:
-                    waiting = blocker.execute(
+                    # pg_stat_activity is cached for a transaction. Observe in
+                    # autocommit so each poll sees newly blocked connections.
+                    waiting = observer.execute(
                         "select count(*) from pg_stat_activity where datname=%s and wait_event_type='Lock'",
                         (self.database,),
                     ).fetchone()[0]
