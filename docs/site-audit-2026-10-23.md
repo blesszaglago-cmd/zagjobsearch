@@ -26,13 +26,15 @@ The additive migration `20261023145423_standalone_pay_period_filter.sql` replace
 - The initial live HTTP pass covered 27 public pages, API routes and guest account boundaries. Public pages rendered, private API reads returned 401, account responses used no-store and empty regional pages used noindex.
 - Live browser checks covered the homepage search, opportunity tabs and page state. Browser-extension errors were distinguished from application errors.
 - Backend regression suite: 129 tests, with five tests requiring disposable PostgreSQL skipped locally. The CI PostgreSQL job exercises the migration, academic states, pay-period and currency combinations, seniority repair and function execution privileges.
-- Frontend security/request regressions: 13 passing tests. Coverage includes private cookies, CSRF origin checks, protected routes, search validation, upstream error redaction and Apply caching.
+- Frontend security/request regressions: 15 passing tests after the Apply-page follow-up. Coverage includes private cookies, CSRF origin checks, protected routes, search validation, upstream error redaction, Apply caching and browser error navigation.
 - Frontend production build passed. ESLint completed with zero errors and zero warnings.
 - Full npm dependency audit reported zero known vulnerabilities. Both backend and optional restore dependency audits reported no known vulnerabilities. Bandit source checks passed at medium severity and confidence.
 - Database inspection confirmed RLS on all application tables, no table grants to anon/authenticated and no execution grants to those roles on the reviewed application RPCs. The catalogue refresh and existing maintenance schedules were healthy.
 - Failed email queue entries inspected in aggregate were expired historical account links. This audit did not send test emails or submit external applications.
 
 The pull request records the exact CI results, production commit and final deployed HTTP checks.
+
+During the live Apply spot check, Fido no longer listed the Account Assistant national-service role in its complete Ghana careers index. The existing source recheck correctly closed that catalogue record and blocked the redirect. The follow-up gives browser visitors a themed explanation page for closed or temporarily unconfirmed application links. JSON clients retain HTTP 410/503, successful applications still redirect directly to the external source, and error responses remain non-cacheable and excluded from indexing.
 
 ## Remaining verification limits
 
