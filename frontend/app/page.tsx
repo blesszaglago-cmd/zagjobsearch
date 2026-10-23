@@ -242,7 +242,8 @@ export default function Home() {
                 </Link>
               </div>
               <p className="portal-small-note">
-                No account needed to search or visit an application website.
+                Browse without an account. Create a free account to apply and
+                track your progress.
               </p>
             </div>
           </div>
@@ -325,9 +326,10 @@ export default function Home() {
               <details>
                 <summary>Do I need an account to apply?</summary>
                 <p>
-                  No. Anyone can search, read a listing and follow its external
-                  application link. An account gives you access to your private
-                  application tracker.
+                  Yes. Anyone can search and read listings. Create a free
+                  account or log in before using Apply. You’ll complete your
+                  application on the original website and can keep a private
+                  record in your tracker.
                 </p>
               </details>
               <details>

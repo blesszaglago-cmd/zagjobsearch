@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
+import PasswordInput from "@/components/PasswordInput";
 import { trackEvent } from "@/lib/analytics";
+import { applicationReturnPath } from "@/lib/application-return";
 
 type Mode = "login" | "signup" | "recovery" | "reset" | "verify";
 const titles: Record<Mode, string> = {
@@ -40,6 +42,8 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState("");
+  const [nextPath, setNextPath] = useState<string>();
+  const [linkRequested, setLinkRequested] = useState(false);
   const [purpose, setPurpose] = useState(mode === "reset" ? "reset" : "verify");
   useEffect(() => {
     const controller = new AbortController();
@@ -50,6 +54,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     queueMicrotask(() => {
       if (controller.signal.aborted) return;
       const params = new URLSearchParams(window.location.search);
+      setNextPath(applicationReturnPath(params.get("next")));
       if (params.get("error"))
         setMessage(
           params.get("error") === "google_setup"
@@ -64,7 +69,11 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         );
         // Remove the one-time secret from browser history. It never reaches a server URL.
         if (window.location.hash)
-          window.history.replaceState(null, "", window.location.pathname);
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
       }
     });
     return () => controller.abort();
@@ -89,10 +98,14 @@ export default function AuthForm({ mode }: { mode: Mode }) {
               ...(mode === "reset" ? { password: form.password } : {}),
             }
           : mode === "signup"
-            ? { ...form, country: "GH" }
+            ? { ...form, country: "GH", next_path: nextPath || "" }
             : mode === "login"
               ? { email: form.email, password: form.password }
-              : { email: form.email, purpose: form.purpose };
+              : {
+                  email: form.email,
+                  purpose: form.purpose,
+                  next_path: nextPath || "",
+                };
       const response = await fetch(`/api/account/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -101,10 +114,11 @@ export default function AuthForm({ mode }: { mode: Mode }) {
       const data = await response.json();
       if (!response.ok) throw new Error(errorMessage(data));
       setMessage(data.message || "Saved.");
+      if (mode === "signup" || mode === "recovery") setLinkRequested(true);
       if (mode === "signup") trackEvent("sign_up", { method: "email" });
       if (mode === "login") {
         trackEvent("login", { method: "email" });
-        router.push("/tracker");
+        router.push(nextPath || "/tracker");
         router.refresh();
       }
     } catch (error) {
@@ -114,14 +128,23 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     }
   }
   const showPassword = ["login", "signup", "reset"].includes(mode);
+  const accountLink = (path: string) =>
+    nextPath ? `${path}?${new URLSearchParams({ next: nextPath })}` : path;
   return (
     <main id="main-content" className="auth-page">
       <div className="surface-card auth-form-card">
         <Logo />
         <h1>{titles[mode]}</h1>
+        {nextPath && (mode === "login" || mode === "signup") && (
+          <p className="field-help">
+            A free account is required to apply. After logging in, you’ll return
+            to your selected listing.
+          </p>
+        )}
         {(mode === "login" || mode === "signup") &&
           capabilities.google_enabled && (
             <form action="/api/account/google" method="get">
+              {nextPath && <input type="hidden" name="next" value={nextPath} />}
               <button type="submit" className="btn-outline google-login">
                 Continue with Google
               </button>
@@ -166,11 +189,16 @@ export default function AuthForm({ mode }: { mode: Mode }) {
               </label>
             )}
             {showPassword && (
-              <label>
-                {mode === "reset" ? "New password" : "Password"}
-                <input
+              <div className="password-group">
+                <label htmlFor="auth-password">
+                  {mode === "reset" ? "New password" : "Password"}
+                </label>
+                <PasswordInput
+                  id="auth-password"
                   name="password"
-                  type="password"
+                  visibilityLabel={
+                    mode === "reset" ? "new password" : "password"
+                  }
                   autoComplete={
                     mode === "login" ? "current-password" : "new-password"
                   }
@@ -188,14 +216,15 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                 {mode !== "login" && (
                   <small id="password-hint">Use at least 8 characters.</small>
                 )}
-              </label>
+              </div>
             )}
             {(mode === "signup" || mode === "reset") && (
-              <label>
-                Confirm password
-                <input
+              <div className="password-group">
+                <label htmlFor="auth-confirm-password">Confirm password</label>
+                <PasswordInput
+                  id="auth-confirm-password"
                   name="confirm-password"
-                  type="password"
+                  visibilityLabel="confirm password"
                   autoComplete="new-password"
                   required
                   minLength={8}
@@ -205,7 +234,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                     setForm({ ...form, confirm_password: e.target.value })
                   }
                 />
-              </label>
+              </div>
             )}
             {mode === "recovery" && (
               <label>
@@ -275,11 +304,22 @@ export default function AuthForm({ mode }: { mode: Mode }) {
             {message}
           </p>
         )}
+        {linkRequested && capabilities.email_enabled && (
+          <p className="field-help">
+            Account emails come from <strong>blesszaglago@gmail.com</strong>.
+            Check Spam or Junk too. If you find our email there, mark it as not
+            spam and add the sender to your contacts.
+          </p>
+        )}
         <nav className="auth-links" aria-label="Account options">
-          {mode !== "login" && <Link href="/login">Log in</Link>}
-          {mode !== "signup" && <Link href="/signup">Create account</Link>}
+          {mode !== "login" && <Link href={accountLink("/login")}>Log in</Link>}
+          {mode !== "signup" && (
+            <Link href={accountLink("/signup")}>Create account</Link>
+          )}
           {(mode === "login" || mode === "signup") && (
-            <Link href="/forgot-password">Forgot password or verify email</Link>
+            <Link href={accountLink("/forgot-password")}>
+              Forgot password or verify email
+            </Link>
           )}
           <Link href="/search">Continue searching</Link>
         </nav>

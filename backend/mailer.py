@@ -7,6 +7,7 @@ import smtplib
 import ssl
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from email.utils import format_datetime, parseaddr
 from database.supabase_client import supabase
 from gmail_transport import GmailTransport, GmailTransportError
 
@@ -312,7 +313,14 @@ def deliver(delivery_id=None, batch_size=100):
                     item["recipient"],
                     item["subject"],
                 )
-                message["Message-ID"] = f"<{item['id']}@jobs-ac-ghana>"
+                sender_domain = parseaddr(email_sender())[1].rsplit("@", 1)[-1]
+                if "." not in sender_domain or any(c.isspace() for c in sender_domain):
+                    raise ValueError("Invalid sender domain")
+                # Keep the ID stable on retries, using the actual sender domain.
+                message["Message-ID"] = f"<{item['id']}@{sender_domain}>"
+                message["Date"] = format_datetime(now)
+                message["Reply-To"] = email_sender()
+                message["Auto-Submitted"] = "auto-generated"
                 message.set_content(item["body"])
                 now = datetime.now(timezone.utc)
                 if expired(item.get("expires_at"), now) or expired(account_expiry, now):

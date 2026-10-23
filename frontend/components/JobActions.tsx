@@ -23,7 +23,7 @@ export type ActionJob = Pick<
   | "category"
 >;
 export default function JobActions({ job }: { job: ActionJob }) {
-  const [signedIn, setSignedIn] = useState(false),
+  const [signedIn, setSignedIn] = useState<boolean | null>(null),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [record, setRecord] = useState("");
@@ -35,7 +35,9 @@ export default function JobActions({ job }: { job: ActionJob }) {
     const c = new AbortController();
     accountRequest("me", { signal: c.signal })
       .then(() => setSignedIn(true))
-      .catch(() => {});
+      .catch(() => {
+        if (!c.signal.aborted) setSignedIn(false);
+      });
     return () => c.abort();
   }, []);
   async function save(automatic = false) {
@@ -101,13 +103,17 @@ export default function JobActions({ job }: { job: ActionJob }) {
             void save(true);
         }}
       >
-        {job.can_apply === false ? "Read official notice" : "Apply at source"}
+        {job.can_apply === false
+          ? "Read official notice"
+          : signedIn === false
+            ? "Create account to apply"
+            : "Apply at source"}
         <Icon name="external-link" />
       </a>
       <p>
         {job.can_apply === false
           ? "Read the notice for its application status."
-          : "Apply on the original website. A saved record does not confirm submission."}
+          : "A free account is required to apply. Complete your application on the original website."}
       </p>
       {signedIn ? (
         <button
@@ -118,8 +124,11 @@ export default function JobActions({ job }: { job: ActionJob }) {
           {record ? "Saved to tracker" : busy ? "Saving…" : "Save to tracker"}
         </button>
       ) : (
-        <Link className="portal-text-link" href="/signup">
-          Create an account for tracking <Icon name="arrow-right" />
+        <Link
+          className="portal-text-link"
+          href={`/login?${new URLSearchParams({ next: `/jobs/${job.id}` })}`}
+        >
+          Already have an account? Log in <Icon name="arrow-right" />
         </Link>
       )}
       {record && (

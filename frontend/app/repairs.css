@@ -4,3 +4,7 @@
   flex: none;
   vertical-align: -0.125em;
 }
+
+.password-field{position:relative;display:block}.account-form .password-field input{padding-inline-end:56px}.password-toggle{position:absolute;inset:2px 2px 2px auto;width:44px;display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:#006b3f;cursor:pointer;font-size:21px}.password-toggle:hover{background:#edf4ef}.password-toggle:focus-visible{outline:2px solid #006b3f;outline-offset:2px}
+
+.account-form .password-group{display:grid;gap:8px}.password-group small{font-size:12px;font-weight:400}

@@ -6,7 +6,7 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Header
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Header, Depends
 from database.supabase_client import supabase
 import ghana_sources
 import employer_sources
@@ -1146,7 +1146,16 @@ def sitemap_listings(offset: int = 0):
     return {"jobs": jobs, "has_more": len(rows) == 1000, "next_offset": offset + 1000}
 
 
-@router.get("/catalogue/{job_id}")
+async def require_apply_account(request: Request, verify: bool = False):
+    # Public details stay readable. Live Apply checks require a current account,
+    # including when a caller skips the frontend and contacts this API directly.
+    if verify:
+        from sessions import bearer, current_user
+
+        current_user(await bearer(request), request)
+
+
+@router.get("/catalogue/{job_id}", dependencies=[Depends(require_apply_account)])
 async def catalogue_details(job_id: str, verify: bool = False, request: Request = None):
     if not re.fullmatch("[a-f0-9]{32}", job_id):
         raise HTTPException(404, "This listing is no longer in the Ghana catalogue.")
