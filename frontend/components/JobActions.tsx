@@ -97,12 +97,11 @@ export default function JobActions({ job }: { job: ActionJob }) {
         rel="noopener noreferrer"
         onClick={() => {
           trackEvent("apply_click", { job_id: job.id });
-          if (job.can_apply !== false && !record) void save(true);
+          if (signedIn && job.can_apply !== false && !record && !busy)
+            void save(true);
         }}
       >
-        {job.can_apply === false
-          ? "Read official notice"
-          : "Apply at source"}
+        {job.can_apply === false ? "Read official notice" : "Apply at source"}
         <Icon name="external-link" />
       </a>
       <p>
@@ -123,7 +122,11 @@ export default function JobActions({ job }: { job: ActionJob }) {
           Create an account for tracking <Icon name="arrow-right" />
         </Link>
       )}
-      {record && <Link href="/tracker">Confirm Applied in your tracker <Icon name="arrow-right" /></Link>}
+      {record && (
+        <Link href="/tracker">
+          Confirm Applied in your tracker <Icon name="arrow-right" />
+        </Link>
+      )}
       <div className="job-share-actions">
         <button className="btn-outline" onClick={() => void share()}>
           Share job

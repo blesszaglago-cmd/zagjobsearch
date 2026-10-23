@@ -50,17 +50,26 @@ export const blankApplication: Application = {
 };
 export async function accountRequest(path: string, options: RequestInit = {}) {
   const response = await fetch(`/api/account/${path}`, options);
-  const data = await response.json();
+  const data = await response.json().catch(() => null);
   if (!response.ok)
     throw Object.assign(
       new Error(
-        typeof data.detail === "string"
+        typeof data?.detail === "string"
           ? data.detail
-          : response.status === 401
-            ? "Log in to use your workspace."
-            : "Could not complete this request.",
+          : Array.isArray(data?.detail)
+            ? data.detail
+                .map((item: { msg?: string }) => item.msg)
+                .filter(Boolean)
+                .join(". ") || "Check your details and try again."
+            : response.status === 401
+              ? "Log in to use your workspace."
+              : "Could not complete this request.",
       ),
       { status: response.status },
+    );
+  if (!data)
+    throw new Error(
+      "The account service returned an unexpected response. Please try again shortly.",
     );
   return data;
 }

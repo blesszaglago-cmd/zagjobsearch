@@ -2,6 +2,7 @@
 import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { accountRequest } from "@/lib/workspace";
@@ -14,6 +15,7 @@ type Profile = {
   auth_provider: string;
 };
 export default function Settings() {
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
@@ -37,6 +39,11 @@ export default function Settings() {
       .catch(() => {});
     return () => c.abort();
   }, []);
+  function leaveAccount(destination: string) {
+    setProfile(null);
+    router.replace(destination);
+    router.refresh();
+  }
   async function action(path: string, method: string, body?: unknown) {
     setBusy(true);
     setMessage("");
@@ -191,7 +198,7 @@ export default function Settings() {
                       password: newPassword,
                     })
                   )
-                    window.location.assign("/login");
+                    leaveAccount("/login");
                 }}
               >
                 <label>
@@ -261,8 +268,7 @@ export default function Settings() {
                 className="btn-outline"
                 disabled={busy}
                 onClick={async () => {
-                  if (await action("logout", "POST"))
-                    window.location.assign("/login");
+                  if (await action("logout", "POST")) leaveAccount("/login");
                 }}
               >
                 Sign out all devices
@@ -307,7 +313,7 @@ export default function Settings() {
                       confirmation,
                     })
                   )
-                    window.location.assign("/");
+                    leaveAccount("/");
                 }}
               >
                 <label>

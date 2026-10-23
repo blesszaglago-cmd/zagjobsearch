@@ -76,6 +76,11 @@ class RestoreDatabaseTests(unittest.TestCase):
                 / "supabase/migrations/20261022223645_academic_opportunity_filters.sql"
             )
             connection.execute(migration.read_text())
+            connection.execute(
+                (
+                    migration.parent / "20261023145423_standalone_pay_period_filter.sql"
+                ).read_text()
+            )
             now = datetime.now(timezone.utc)
             for identity, provider, window, deadline in [
                 ("dated", "university", "deadline", now + timedelta(days=2)),
@@ -135,6 +140,79 @@ class RestoreDatabaseTests(unittest.TestCase):
                 connection.execute(
                     "select prosecdef from pg_proc where oid='public.search_ghana_catalogue(jsonb)'::regprocedure"
                 ).fetchone()[0]
+            )
+            for identity, currency, period, minimum, maximum in [
+                ("ghs-month", "GHS", "month", 1000, 2000),
+                ("ghs-year", "GHS", "year", 12000, 24000),
+                ("usd-month", "USD", "month", 3000, 4000),
+                ("unstated-pay", "", "", None, None),
+            ]:
+                connection.execute(
+                    "insert into public.job_catalogue(id,source_key,payload) values(%s,%s,%s)",
+                    (
+                        identity,
+                        "employer",
+                        Jsonb(
+                            {
+                                "id": identity,
+                                "title": (
+                                    "Sr. Analyst"
+                                    if identity == "ghs-year"
+                                    else "Analyst"
+                                ),
+                                "category": "jobs",
+                                "experience": "unspecified",
+                                "salary_currency": currency,
+                                "salary_period": period,
+                                "salary_min": minimum,
+                                "salary_max": maximum,
+                            }
+                        ),
+                    ),
+                )
+            connection.execute(
+                (
+                    migration.parent / "20261023145423_standalone_pay_period_filter.sql"
+                ).read_text()
+            )
+            self.assertEqual(search(category="jobs")["total"], 4)
+            yearly = search(category="jobs", salary_period="year")["jobs"]
+            self.assertEqual(yearly[0]["experience"], "senior")
+            monthly = search(category="jobs", salary_period="month")["jobs"]
+            self.assertEqual(monthly[0]["experience"], "unspecified")
+            self.assertEqual(
+                [
+                    j["id"]
+                    for j in search(category="jobs", salary_period="month")["jobs"]
+                ],
+                ["ghs-month"],
+            )
+            self.assertEqual(
+                [
+                    j["id"]
+                    for j in search(
+                        category="jobs", salary_period="month", salary_currency="USD"
+                    )["jobs"]
+                ],
+                ["usd-month"],
+            )
+            self.assertEqual(
+                [
+                    j["id"]
+                    for j in search(category="jobs", salary_period="year")["jobs"]
+                ],
+                ["ghs-year"],
+            )
+            self.assertEqual(search(category="jobs", salary_period="hour")["total"], 0)
+            self.assertEqual(search(category="jobs", salary_min="10000")["total"], 1)
+            self.assertEqual(
+                search(
+                    category="jobs",
+                    salary_period="month",
+                    salary_min="1500",
+                    salary_max="2500",
+                )["total"],
+                1,
             )
 
     def test_all_values_ids_history_json_and_rls_survive(self):

@@ -15,6 +15,10 @@ import auth
 import catalogue
 import ghana_sources
 import security
+import workspace_api as workspace
+import account_security
+import saved_searches
+from sessions import current_user
 from main import app
 
 
@@ -68,6 +72,13 @@ class InjectionTransportTests(unittest.TestCase):
 
 
 class RequestBoundaryTests(unittest.TestCase):
+    def test_invalid_pay_period_is_rejected_before_querying_database(self):
+        with patch.object(catalogue, "supabase", MagicMock()) as database:
+            with self.assertRaises(HTTPException) as error:
+                catalogue.query_catalogue({"salary_period": "invalid"})
+            self.assertEqual(error.exception.status_code, 400)
+            database.rpc.assert_not_called()
+
     def test_sql_shaped_login_is_rejected_before_authentication(self):
         with patch("main.login_user") as login:
             response = TestClient(app).post(
@@ -120,3 +131,118 @@ class FeedBoundaryTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ValueError, "Agency feed unavailable"):
                 await ghana_sources.hireghana(client)
             parse.assert_not_called()
+
+
+class WorkspaceBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        override = patch.dict(
+            app.dependency_overrides, {current_user: lambda: "test-owner"}
+        )
+        override.start()
+        self.addCleanup(override.stop)
+
+    def test_blank_required_fields_and_nonfinite_pay_never_reach_database(self):
+        client = TestClient(app)
+        with patch.object(workspace, "supabase", MagicMock()) as database:
+            for field, value in [("job_title", "  "), ("company_name", "\t\n")]:
+                with self.subTest(field=field):
+                    response = client.post(
+                        "/account/applications",
+                        json={
+                            "job_title": "Analyst",
+                            "company_name": "Example",
+                            field: value,
+                        },
+                    )
+                    self.assertEqual(response.status_code, 422)
+            for value in ["Infinity", "NaN", "-Infinity"]:
+                response = client.post(
+                    "/account/applications",
+                    content='{"job_title":"Analyst","company_name":"Example","salary_max":'
+                    + value
+                    + "}",
+                    headers={"Content-Type": "application/json"},
+                )
+                self.assertEqual(response.status_code, 422)
+            database.table.assert_not_called()
+
+    def test_names_are_trimmed_before_length_validation(self):
+        for create in [
+            lambda: account_security.Preferences(full_name="   "),
+            lambda: saved_searches.SavedSearch(name="   ", filters={}),
+        ]:
+            with self.assertRaises(ValueError):
+                create()
+        application = workspace.Application(
+            job_title="  Analyst  ",
+            company_name=" Example ",
+            source_url=" https://example.com/careers ",
+        )
+        self.assertEqual(application.job_title, "Analyst")
+        self.assertEqual(application.company_name, "Example")
+        self.assertEqual(application.source_url, "https://example.com/careers")
+
+    def test_malformed_private_record_ids_are_validation_errors(self):
+        client = TestClient(app)
+        with patch.object(
+            workspace, "supabase", MagicMock()
+        ) as applications, patch.object(
+            saved_searches, "supabase", MagicMock()
+        ) as searches:
+            for method, path, body in [
+                (
+                    "PUT",
+                    "/account/applications/not-a-uuid",
+                    {"job_title": "Test", "company_name": "Example"},
+                ),
+                ("DELETE", "/account/applications/not-a-uuid", None),
+                ("POST", "/account/applications/not-a-uuid/restore", None),
+                ("GET", "/account/applications/not-a-uuid/events", None),
+                ("DELETE", "/account/saved-searches/not-a-uuid", None),
+            ]:
+                with self.subTest(path=path, method=method):
+                    self.assertEqual(
+                        client.request(method, path, json=body).status_code, 422
+                    )
+            applications.table.assert_not_called()
+            searches.table.assert_not_called()
+
+    def test_deleted_application_cannot_be_edited_or_read_without_restoring(self):
+        requests = []
+
+        def receive(request):
+            requests.append(request)
+            self.assertEqual(request.url.params.get("user_id"), "eq.test-owner")
+            self.assertEqual(request.url.params.get("deleted_at"), "is.null")
+            return httpx.Response(200, json=[])
+
+        with httpx.Client(transport=httpx.MockTransport(receive)) as transport:
+            database = SyncPostgrestClient(
+                "https://database.example/rest/v1", http_client=transport
+            )
+            with patch.object(workspace, "supabase", database):
+                for operation in [
+                    lambda: workspace.update_application(
+                        "00000000-0000-0000-0000-000000000001",
+                        workspace.Application(
+                            job_title="Analyst", company_name="Example"
+                        ),
+                        "test-owner",
+                    ),
+                    lambda: workspace.events(
+                        "00000000-0000-0000-0000-000000000001", "test-owner"
+                    ),
+                ]:
+                    with self.assertRaises(HTTPException) as error:
+                        operation()
+                    self.assertEqual(error.exception.status_code, 404)
+        self.assertEqual([r.method for r in requests], ["GET", "GET"])
+
+    def test_source_explicit_seniority_abbreviations(self):
+        for title in [
+            "Sr. Specialist, Long Term Planning",
+            "Sr Engineer",
+            "Snr Analyst",
+        ]:
+            self.assertEqual(catalogue.level(title), "senior")
+        self.assertEqual(catalogue.level("Analyst"), "unspecified")

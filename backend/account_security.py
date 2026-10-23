@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials
 import time
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from database.supabase_client import supabase
 from sessions import current_user, issue_session, bearer, session_payload
 from auth import find_email, hash_password, verify_password
@@ -220,6 +220,11 @@ class Preferences(BaseModel):
     country: str = Field(default="GH", min_length=2, max_length=2)
     accepted_terms: bool = False
     age_confirmed: bool = False
+
+    @field_validator("full_name", mode="before")
+    @classmethod
+    def clean_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 @router.put("/account/settings")

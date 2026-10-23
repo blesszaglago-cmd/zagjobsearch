@@ -2,6 +2,15 @@ import "server-only";
 import { cache } from "react";
 import { API_URL } from "./api";
 import type { Job } from "./jobs";
+export class CatalogueRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: 400 | 503,
+  ) {
+    super(message);
+    this.name = "CatalogueRequestError";
+  }
+}
 export const getSearchResult = cache(async function getSearchResult(
   query: string,
 ) {
@@ -11,7 +20,20 @@ export const getSearchResult = cache(async function getSearchResult(
     cache: "no-store",
     signal: AbortSignal.timeout(15000),
   });
-  if (!r.ok) throw new Error("The Ghana catalogue is temporarily unavailable.");
+  if (r.status === 400) {
+    const data = await r.json().catch(() => null);
+    throw new CatalogueRequestError(
+      typeof data?.detail === "string"
+        ? data.detail
+        : "Check your search filters and try again.",
+      400,
+    );
+  }
+  if (!r.ok)
+    throw new CatalogueRequestError(
+      "The Ghana catalogue is temporarily unavailable. Please try again shortly.",
+      503,
+    );
   return r.json();
 });
 export async function searchJobs(params: URLSearchParams) {

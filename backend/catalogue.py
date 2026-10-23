@@ -170,7 +170,7 @@ def level(title, provided=""):
     t = (title + " " + provided).lower()
     for key, pattern in [
         ("no-experience", r"no experience"),
-        ("senior", r"\bsenior\b|\bsnr\b|\bprincipal\b|\blead\b"),
+        ("senior", r"\bsenior\b|\bsnr\b|\bsr\b|\bprincipal\b|\blead\b"),
         ("management", r"\bmanager\b|\bdirector\b|\bhead\b|\bchief\b"),
         ("junior", r"\bjunior\b|\bjnr\b|entry[ -]level"),
         ("mid", r"mid[ -]level|intermediate"),
@@ -964,6 +964,8 @@ def query_catalogue(params):
         raise HTTPException(400, "Choose a listing category.")
     if p.get("availability", "open") not in ["all", "open", "unconfirmed", "closed"]:
         raise HTTPException(400, "Choose a scholarship status.")
+    if p.get("salary_period", "") not in ["", "hour", "day", "week", "month", "year"]:
+        raise HTTPException(400, "Choose a valid pay period.")
     try:
         p["page"] = str(max(1, min(1000000, int(p.get("page", "1")))))
         for key in ["salary_min", "salary_max"]:

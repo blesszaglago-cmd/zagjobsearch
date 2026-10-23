@@ -19,13 +19,15 @@ function loadRoute(relative, fetchImpl = async () => { throw Error("Unexpected u
   const localRequire = (id) => {
     if (id === "server-only") return {};
     if (id === "@/lib/api") return { API_URL: "https://backend.example" };
+    if (id === "./api") return { API_URL: "https://backend.example" };
+    if (id === "@/lib/jobs-server") return loadRoute("../lib/jobs-server.ts", fetchImpl, env);
     if (id === "@/lib/cron-auth") return loadRoute("../lib/cron-auth.ts", fetchImpl, env);
     return require(id);
   };
   vm.runInNewContext(code, {
     require: localRequire, module: routeModule, exports: routeModule.exports, fetch: fetchImpl,
     process: { env: { NODE_ENV: "production", CRON_SECRET: secret, ...env } },
-    Buffer, AbortSignal, Response, URL,
+    Buffer, AbortSignal, Response, URL, URLSearchParams,
   }, { filename });
   return routeModule.exports;
 }
@@ -105,4 +107,70 @@ test("login keeps its session token in a secure HttpOnly cookie", async () => {
   assert.match(cookie, /Secure/);
   assert.match(cookie, /SameSite=lax/);
   assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("invalid catalogue filters keep their actionable 400 response", async () => {
+  const route = loadRoute("../app/api/jobs/route.ts", async () => Response.json({
+    detail: "Enter a valid page and salary range.",
+  }, { status: 400 }));
+  const response = await route.GET(new NextRequest("https://site.example/api/jobs?salary_min=-1"));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { detail: "Enter a valid page and salary range." });
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("catalogue provider and connection failures never disclose upstream details", async () => {
+  for (const upstream of [
+    async () => Response.json({ detail: "test-only-private-database-error" }, { status: 500 }),
+    async () => { throw Error("test-only-private-network-error"); },
+  ]) {
+    const route = loadRoute("../app/api/jobs/route.ts", upstream);
+    const response = await route.GET(new NextRequest("https://site.example/api/jobs"));
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.doesNotMatch(await response.text(), /test-only-private/);
+  }
+});
+
+test("catalogue filters reach the backend intact without the retired country option", async () => {
+  let target;
+  const route = loadRoute("../app/api/jobs/route.ts", async (url) => {
+    target = new URL(url);
+    return Response.json({ jobs: [], total: 0, page: 2, has_more: false });
+  });
+  const response = await route.GET(new NextRequest("https://site.example/api/jobs?category=scholarships&source=daad-ghana&salary_period=month&page=2&country=US"));
+  assert.equal(response.status, 200);
+  assert.equal(target.searchParams.get("source"), "daad-ghana");
+  assert.equal(target.searchParams.get("salary_period"), "month");
+  assert.equal(target.searchParams.get("page"), "2");
+  assert.equal(target.searchParams.has("country"), false);
+});
+
+test("tracker validation messages reach the person editing their application", async () => {
+  const workspace = loadRoute("../lib/workspace.ts", async () => Response.json({ detail: [
+    { msg: "The maximum salary must be at least the minimum salary." },
+  ] }, { status: 422 }));
+  await assert.rejects(workspace.accountRequest("applications"), (error) => {
+    assert.equal(error.status, 422);
+    assert.match(error.message, /maximum salary/);
+    return true;
+  });
+});
+
+test("non-JSON account errors provide a usable retry message", async () => {
+  const workspace = loadRoute("../lib/workspace.ts", async () => new Response("<h1>Unavailable</h1>", { status: 503 }));
+  await assert.rejects(workspace.accountRequest("applications"), (error) => {
+    assert.equal(error.status, 503);
+    assert.equal(error.message, "Could not complete this request.");
+    return true;
+  });
+});
+
+test("closed and temporarily unavailable Apply responses cannot be cached", async () => {
+  for (const status of [404, 503]) {
+    const route = loadRoute("../app/api/jobs/[id]/apply/route.ts", async () => Response.json({ detail: "Unavailable" }, { status }));
+    const response = await route.GET(new Request("https://site.example/api/jobs/test/apply"), { params: Promise.resolve({ id: "test" }) });
+    assert.equal(response.status, status === 404 ? 410 : 503);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
 });

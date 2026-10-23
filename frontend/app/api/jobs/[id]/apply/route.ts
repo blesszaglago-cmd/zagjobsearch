@@ -9,7 +9,7 @@ export async function GET(
     if (!job || job.can_apply === false)
       return Response.json(
         { detail: "This opportunity is no longer open for applications." },
-        { status: 410 },
+        { status: 410, headers: { "Cache-Control": "no-store" } },
       );
     const target = new URL(job.url);
     if (target.protocol !== "https:") throw Error("Unsupported destination");
@@ -27,7 +27,7 @@ export async function GET(
         detail:
           "The original source could not confirm this posting. Please try again shortly.",
       },
-      { status: 503 },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
 }
