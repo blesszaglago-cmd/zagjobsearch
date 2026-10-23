@@ -72,7 +72,7 @@ class AccountDatabaseTests(unittest.TestCase):
             """)
             migration = (
                 Path(__file__).resolve().parents[2]
-                / "supabase/migrations/20261023191550_atomic_account_security.sql"
+                / "supabase/migrations/20261023225624_atomic_account_security.sql"
             )
             connection.execute(migration.read_text())
             connection.execute(
