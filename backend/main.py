@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from request_limits import RequestLimitsMiddleware
 import os
 
 from auth import (
@@ -29,7 +30,11 @@ app = FastAPI(
     title="jobs.ac.ghana API",
     description="Ghana jobs, remote roles accepting Ghana applicants, and scholarships",
     version="2.1.0",
+    docs_url=None if os.getenv("VERCEL") else "/docs",
+    redoc_url=None if os.getenv("VERCEL") else "/redoc",
+    openapi_url=None if os.getenv("VERCEL") else "/openapi.json",
 )
+app.add_middleware(RequestLimitsMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
@@ -52,7 +57,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         os.getenv("FRONTEND_URL", "https://zagjobsearch.vercel.app"),
-        "http://localhost:3000",
+        *([] if os.getenv("VERCEL") else ["http://localhost:3000"]),
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,11 +138,15 @@ app.include_router(workspace_router)
 @app.get("/auth/config")
 def auth_config():
     from mailer import email_enabled
+    from security import public_supabase_key
+
+    publishable_key = public_supabase_key(os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 
     return {
         "supabase_url": os.getenv("SUPABASE_URL", ""),
-        "publishable_key": os.getenv("SUPABASE_PUBLISHABLE_KEY", ""),
-        "google_enabled": os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true",
+        "publishable_key": publishable_key,
+        "google_enabled": bool(publishable_key)
+        and os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true",
         "email_enabled": email_enabled(),
     }
 
@@ -159,6 +168,11 @@ async def security_headers(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+        if os.getenv("VERCEL")
+        else "frame-ancestors 'none'"
+    )
     if request.url.path.startswith(("/account", "/auth", "/login", "/signup")):
         response.headers["Cache-Control"] = "no-store"
     return response

@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { API_URL } from "@/lib/api";
+import { boundedBody, RequestBodyError } from "@/lib/request-body";
+import { clientIpHeaders } from "@/lib/proxy-client";
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -8,26 +10,29 @@ export async function POST(
     return Response.json({ detail: "Invalid request origin" }, { status: 403 });
   const { id } = await params;
   try {
-    const text = await request.text();
-    if (text.length > 5000)
-      return Response.json({ detail: "Report is too long" }, { status: 413 });
-    const r = await fetch(
-      `${API_URL}/catalogue/${encodeURIComponent(id)}/report`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for":
-            request.headers.get("x-vercel-forwarded-for") ||
-            request.headers.get("x-forwarded-for") ||
-            "unknown",
-        },
-        body: text,
-        signal: AbortSignal.timeout(12000),
+    const body = await boundedBody(request, 12 * 1024);
+    const endpoint = `/catalogue/${encodeURIComponent(id)}/report`;
+    const r = await fetch(`${API_URL}${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...clientIpHeaders(request, "POST", endpoint),
       },
-    );
-    return Response.json(await r.json(), { status: r.status });
-  } catch {
+      body,
+      cache: "no-store",
+      signal: AbortSignal.timeout(12000),
+    });
+    if (r.status >= 500) throw Error("Provider unavailable");
+    return Response.json(await r.json(), {
+      status: r.status,
+      headers: { "Cache-Control": "no-store" },
+    });
+  } catch (error) {
+    if (error instanceof RequestBodyError)
+      return Response.json(
+        { detail: error.message },
+        { status: error.status, headers: { "Cache-Control": "no-store" } },
+      );
     return Response.json(
       { detail: "Report could not be saved. Please try again." },
       { status: 503 },

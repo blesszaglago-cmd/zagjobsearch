@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { API_URL } from "@/lib/api";
+import { clientIpHeaders } from "@/lib/proxy-client";
 
 const privateHeaders = {
   "Cache-Control": "private, no-store",
@@ -13,12 +14,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const upstream = await fetch(`${API_URL}/account/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...clientIpHeaders(request, "GET", "/account/me"),
+      },
       cache: "no-store",
       signal: AbortSignal.timeout(25000),
     });
     if (upstream.status === 401)
-      return NextResponse.json({ signed_in: false }, { headers: privateHeaders });
+      return NextResponse.json(
+        { signed_in: false },
+        { headers: privateHeaders },
+      );
     if (!upstream.ok)
       return NextResponse.json(
         { detail: "Account service is unavailable. Please try again shortly." },

@@ -16,6 +16,7 @@ import funding_sources
 import early_career_sources
 import marriott_source
 from listing_quality import enrich, deduplicate, identity
+from public_http import PublicSourceClient, source_client, source_url
 
 router = APIRouter()
 NOW = lambda: datetime.now(timezone.utc)
@@ -749,36 +750,8 @@ async def mining(client):
     return "anglogold", [x for x in out if x]
 
 
-class PublicSourceClient:
-    """Bound concurrency per host as well as across the complete source refresh."""
-
-    def __init__(self, client):
-        self.client = client
-        self.slots = asyncio.Semaphore(24)
-        self.hosts = {}
-
-    async def get(self, url, **kwargs):
-        host = urlparse(url).hostname
-        limit = self.hosts.setdefault(host, asyncio.Semaphore(3))
-        async with limit, self.slots:
-            for attempt in range(2):
-                try:
-                    response = await self.client.get(url, **kwargs)
-                    if response.status_code not in (502, 503, 504) or attempt:
-                        return response
-                except (httpx.ConnectError, httpx.TimeoutException):
-                    if attempt:
-                        raise
-                await asyncio.sleep(0.5)
-
-
 async def collect(archive_page=9, tracked=None):
-    async with httpx.AsyncClient(
-        timeout=12,
-        follow_redirects=True,
-        headers=HEADERS,
-        limits=httpx.Limits(max_connections=24),
-    ) as http_client:
+    async with source_client(HEADERS) as http_client:
         client = PublicSourceClient(http_client)
         tasks = [
             *(smart(client, b) for b in SMART),
@@ -1174,9 +1147,13 @@ def sitemap_listings(offset: int = 0):
 
 
 @router.get("/catalogue/{job_id}")
-async def catalogue_details(job_id: str, verify: bool = False):
+async def catalogue_details(job_id: str, verify: bool = False, request: Request = None):
     if not re.fullmatch("[a-f0-9]{32}", job_id):
         raise HTTPException(404, "This listing is no longer in the Ghana catalogue.")
+    if verify and request is not None:
+        from security import rate_limit
+
+        rate_limit(request, "apply-source-check", limit=30, seconds=60)
     rows = (
         supabase.table("job_catalogue")
         .select("*")
@@ -1211,38 +1188,38 @@ async def catalogue_details(job_id: str, verify: bool = False):
     # Recheck the allowlisted source endpoint on detail views, never arbitrary stored links.
     check = j.get("check_url")
     host = urlparse(check or "").hostname
-    if (
-        verify
-        and check
-        and host
-        in [
-            "api.smartrecruiters.com",
-            "boards-api.greenhouse.io",
-            "careers.anglogoldashanti.com",
-            "www.ghanacurrentjobs.com",
-            "hiregh.com",
-            "www.glmis.gov.gh",
-            "jobs.newmont.com",
-            "telecel.zohorecruit.com",
-            "api.ashbyhq.com",
-            "gh.fido.money",
-            "erp.mpharma.com",
-            "scholarships.gov.gh",
-            "www.daad-ghana.org",
-            "rid.ug.edu.gh",
-            "ogr.knust.edu.gh",
-            "jobwebghana.com",
-            "careers.votex365.com",
-            "www.ug.edu.gh",
-            "nya.gov.gh",
-            "careers.marriott.com",
-            *funding_sources.CHECK_HOSTS,
-        ]
-    ):
+    check_hosts = [
+        "api.smartrecruiters.com",
+        "boards-api.greenhouse.io",
+        "careers.anglogoldashanti.com",
+        "www.ghanacurrentjobs.com",
+        "hiregh.com",
+        "www.glmis.gov.gh",
+        "jobs.newmont.com",
+        "telecel.zohorecruit.com",
+        "api.ashbyhq.com",
+        "gh.fido.money",
+        "erp.mpharma.com",
+        "scholarships.gov.gh",
+        "www.daad-ghana.org",
+        "rid.ug.edu.gh",
+        "ogr.knust.edu.gh",
+        "jobwebghana.com",
+        "careers.votex365.com",
+        "www.ug.edu.gh",
+        "nya.gov.gh",
+        "careers.marriott.com",
+        *funding_sources.CHECK_HOSTS,
+    ]
+    if verify:
+        if not check or host not in check_hosts:
+            raise HTTPException(
+                503, "This opportunity needs an approved source check before applying."
+            )
         try:
-            async with httpx.AsyncClient(
-                timeout=10, follow_redirects=True, headers=HEADERS
-            ) as client:
+            source_url(check)
+            async with source_client(HEADERS, timeout=10) as http_client:
+                client = PublicSourceClient(http_client)
                 r = await client.get(check)
                 if j.get("source_key") == "marriott-ghana" and r.status_code == 200:
                     fresh = await marriott_source.recheck(client, j, r)

@@ -64,11 +64,20 @@ class Application(BaseModel):
     @field_validator("source_url", "company_website")
     @classmethod
     def safe_url(cls, value):
-        if value and (
-            urlsplit(value).scheme not in ("https", "http")
-            or not urlsplit(value).netloc
-        ):
-            raise ValueError("Use a complete http or https link.")
+        if value:
+            parsed = urlsplit(value)
+            if (
+                parsed.scheme not in ("https", "http")
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+                or "\\" in value
+                or any(ord(c) < 33 for c in value)
+            ):
+                raise ValueError(
+                    "Use a complete http or https link without embedded credentials."
+                )
+            _ = parsed.port  # Reject malformed ports before a browser renders the link.
         return value
 
     def record(self):

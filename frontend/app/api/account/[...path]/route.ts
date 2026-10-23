@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { API_URL } from "@/lib/api";
+import { boundedBody, RequestBodyError } from "@/lib/request-body";
+import { clientIpHeaders } from "@/lib/proxy-client";
 const cookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
@@ -112,27 +114,15 @@ async function handle(
         headers.Authorization = `Bearer ${token}`;
       }
       if (request.method !== "GET") {
-        const size = Number(request.headers.get("content-length") || 0);
-        if (size > 6 * 1024 * 1024)
-          return NextResponse.json(
-            { detail: "File too large" },
-            { status: 413 },
-          );
-        const bytes = await request.arrayBuffer();
-        if (bytes.byteLength > 6 * 1024 * 1024)
-          return NextResponse.json(
-            { detail: "File too large" },
-            { status: 413 },
-          );
-        body = bytes;
+        body = await boundedBody(request);
         headers["Content-Type"] =
           request.headers.get("content-type") || "application/json";
       }
     }
-    headers["X-Forwarded-For"] =
-      request.headers.get("x-vercel-forwarded-for") ||
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    headers = {
+      ...headers,
+      ...clientIpHeaders(request, method, new URL(endpoint).pathname),
+    };
     const upstream = await fetch(endpoint, {
       method,
       headers,
@@ -192,7 +182,12 @@ async function handle(
       response.cookies.delete("zag_oauth_state");
     }
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyError)
+      return NextResponse.json(
+        { detail: error.message },
+        { status: error.status },
+      );
     return NextResponse.json(
       { detail: "Account service is unavailable. Please try again shortly." },
       { status: 503 },
@@ -205,6 +200,13 @@ async function accountHandler(
 ) {
   const response = await handle(request, context);
   response.headers.set("Cache-Control", "no-store");
+  if (
+    request.nextUrl.pathname === "/api/account/google/callback" &&
+    response instanceof NextResponse
+  ) {
+    response.cookies.delete("zag_pkce");
+    response.cookies.delete("zag_oauth_state");
+  }
   return response;
 }
 export const GET = accountHandler;

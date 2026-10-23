@@ -1,4 +1,5 @@
 import { getJob } from "@/lib/jobs-server";
+import { clientIpHeaders } from "@/lib/proxy-client";
 
 function unavailable(request: Request, status: 410 | 503, detail: string) {
   const headers = {
@@ -23,7 +24,11 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const job = await getJob(id, true);
+    const job = await getJob(
+      id,
+      true,
+      clientIpHeaders(request, "GET", `/catalogue/${encodeURIComponent(id)}`),
+    );
     if (!job || job.can_apply === false)
       return unavailable(
         request,
@@ -31,7 +36,13 @@ export async function GET(
         "This opportunity is no longer open for applications.",
       );
     const target = new URL(job.url);
-    if (target.protocol !== "https:") throw Error("Unsupported destination");
+    if (
+      target.protocol !== "https:" ||
+      target.username ||
+      target.password ||
+      (target.port && target.port !== "443")
+    )
+      throw Error("Unsupported destination");
     return new Response(null, {
       status: 302,
       headers: {

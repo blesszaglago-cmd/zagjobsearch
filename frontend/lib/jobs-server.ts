@@ -42,12 +42,14 @@ export async function searchJobs(params: URLSearchParams) {
 export const getJob = cache(async function getJob(
   id: string,
   verify = false,
+  verificationHeaders?: Record<string, string>,
 ): Promise<Job | undefined> {
   const r = await fetch(
     `${API_URL}/catalogue/${encodeURIComponent(id)}${verify ? "?verify=true" : ""}`,
     {
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
+      headers: verify ? verificationHeaders : undefined,
     },
   );
   if (r.status === 404 || r.status === 410) return;
