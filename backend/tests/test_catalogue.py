@@ -127,12 +127,20 @@ class CatalogueTests(unittest.IsolatedAsyncioTestCase):
             {"id": "gone", "source_key": "test"},
             {"id": "keep", "source_key": "unavailable"},
             {"id": "window", "source_key": "glmis"},
+            {"id": "funding_window", "source_key": "ug-research"},
+            {"id": "board_window", "source_key": "jobweb-ghana"},
         ]
         with patch.object(c, "supabase", db), patch.object(
             c,
             "collect",
             AsyncMock(
-                return_value=[("test", [job]), ("unavailable", None), ("glmis", [])]
+                return_value=[
+                    ("test", [job]),
+                    ("unavailable", None),
+                    ("glmis", []),
+                    ("ug-research", []),
+                    ("jobweb-ghana", []),
+                ]
             ),
         ):
             result = await c.refresh()

@@ -75,12 +75,6 @@ EXTERNAL_SOURCES = [
         "Visit the board. Automated access was unavailable at our source audit.",
     ),
     (
-        "Jobwebghana",
-        "https://jobwebghana.com/",
-        "Job board",
-        "Visit the board. Automated access was unavailable at our source audit.",
-    ),
-    (
         "SokoJob",
         "https://sokojob.com/",
         "Job board",

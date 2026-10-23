@@ -13,6 +13,8 @@ import {
   types,
   experienceLevels,
   studyLevels,
+  scholarshipTypes,
+  scholarshipSources,
   displayDate,
 } from "@/lib/ghana";
 type SearchData = {
@@ -22,6 +24,7 @@ type SearchData = {
   updated_at?: string;
   source_status?: { state: string }[];
   error?: string;
+  scholarship_counts?: { open: number; unconfirmed: number; closed: number };
 };
 export default function SearchContent({
   initialData,
@@ -88,7 +91,7 @@ export default function SearchContent({
           <p className="eyebrow">OPPORTUNITIES FOR GHANA</p>
           <h1>
             {scholarship
-              ? "Invest in your next qualification."
+              ? "Fund your studies. Advance your research."
               : category === "early"
                 ? "Your first experience starts here."
                 : category === "remote"
@@ -97,7 +100,7 @@ export default function SearchContent({
           </h1>
           <p>
             {scholarship
-              ? "Browse Scholsec’s published scholarships and notices. Open awards, unconfirmed deadlines and the closed archive stay separate."
+              ? "Explore scholarships, research grants, fellowships and funded training for eligible applicants in Ghana. Check academic, institutional and partner requirements on each notice."
               : "Search source-linked vacancies. Check the details. Apply directly at the original source."}
           </p>
         </section>
@@ -140,7 +143,38 @@ export default function SearchContent({
                   <option value="open">Open for applications</option>
                   <option value="unconfirmed">Deadline unconfirmed</option>
                   <option value="closed">Closed archive</option>
-                  <option value="all">All Scholsec notices</option>
+                  <option value="all">
+                    All opportunities & archived notices
+                  </option>
+                </select>
+                <label className="field-label" htmlFor="scholarship-type">
+                  Opportunity type
+                </label>
+                <select
+                  id="scholarship-type"
+                  name="job_type"
+                  defaultValue={params.get("job_type") || "all"}
+                >
+                  {scholarshipTypes.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <label className="field-label" htmlFor="scholarship-source">
+                  Provider / source
+                </label>
+                <select
+                  id="scholarship-source"
+                  name="source"
+                  defaultValue={params.get("source") || ""}
+                >
+                  <option value="">All connected academic sources</option>
+                  {scholarshipSources.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
                 <label className="field-label" htmlFor="study">
                   Study level
@@ -167,9 +201,7 @@ export default function SearchContent({
                 >
                   <option value="">Ghana and abroad</option>
                   <option value="ghana">Study in Ghana</option>
-                  <option value="abroad">
-                    Study abroad, Ghanaian eligible
-                  </option>
+                  <option value="abroad">Study / research abroad</option>
                 </select>
                 <label className="field-label" htmlFor="funding">
                   Funding
@@ -333,7 +365,7 @@ export default function SearchContent({
                 defaultValue={params.get("q") || ""}
                 placeholder={
                   scholarship
-                    ? "Scholarship, provider or subject"
+                    ? "Scholarship, research topic, provider or subject"
                     : "Job title, employer or skill"
                 }
                 maxLength={200}
@@ -344,32 +376,59 @@ export default function SearchContent({
             </div>
             <div
               className="gh-subsections"
-              aria-label={scholarship ? "Study levels" : "Listing subsections"}
+              aria-label={
+                scholarship ? "Funding subsections" : "Listing subsections"
+              }
             >
-              {(scholarship ? studyLevels : types[category] || types.jobs).map(
-                ([v, l]) => {
-                  const next = new URLSearchParams({
-                    category,
-                    [scholarship ? "study_level" : "job_type"]: v,
-                  });
-                  return (
-                    <Link key={v} href={`/search?${next}`}>
-                      {l}
-                    </Link>
-                  );
-                },
-              )}
+              {(scholarship
+                ? scholarshipTypes
+                : types[category] || types.jobs
+              ).map(([v, l]) => {
+                const next = new URLSearchParams({
+                  category,
+                  job_type: v,
+                });
+                return (
+                  <Link key={v} href={`/search?${next}`}>
+                    {l}
+                  </Link>
+                );
+              })}
             </div>
             <p role="status" className="results-count">
               {loading
                 ? "Loading the Ghana catalogue…"
-                : `${total} ${scholarship ? "scholarship notices" : "current opportunities"} · Page ${page}`}
+                : `${total} ${scholarship ? "funding opportunities & notices" : "current opportunities"} · Page ${page}`}
             </p>
+            {scholarship && (
+              <div className="filter-note">
+                {initialData.scholarship_counts && (
+                  <p>
+                    {initialData.scholarship_counts.open} open ·{" "}
+                    {initialData.scholarship_counts.unconfirmed} with an
+                    unconfirmed deadline ·{" "}
+                    {initialData.scholarship_counts.closed} archived under these
+                    filters.
+                  </p>
+                )}
+                <p>
+                  Open is the default. Notices with expired or unconfirmed
+                  deadlines stay in separate views.
+                </p>
+                <Link href="/search?category=scholarships&source=scholarships-authority&availability=all">
+                  See every published ScholSec notice{" "}
+                  <Icon name="arrow-right" />
+                </Link>
+              </div>
+            )}
             <SaveSearch filters={filterString || "category=jobs"} />
             {updated ? (
               <p className="filter-note">
                 Last refresh {displayDate(updated)}. Rechecked automatically
-                each day. <Link href="/sources">See our sources <Icon name="arrow-right" /></Link>
+                each day.{" "}
+                <Link href="/sources">
+                  See our sources <Icon name="arrow-right" />
+                </Link>
               </p>
             ) : null}
             {warning ? (
@@ -403,6 +462,13 @@ export default function SearchContent({
                         {job.description.slice(0, 200)}…
                       </p>
                       <div className="job-tags">
+                        {scholarship && (
+                          <span className="tag">
+                            {scholarshipTypes.find(
+                              ([key]) => key === job.job_type,
+                            )?.[1] || "Funding notice"}
+                          </span>
+                        )}
                         {scholarship && (
                           <span
                             className={`tag scholarship-status ${job.listing_status}`}
@@ -439,7 +505,10 @@ export default function SearchContent({
                         {job.created
                           ? `${job.date_kind === "source_updated" ? "Source updated" : "Posted"} ${displayDate(job.created)} · `
                           : ""}
-                        Deadline: {displayDate(job.deadline)}
+                        Deadline:{" "}
+                        {job.application_window === "rolling"
+                          ? "Rolling applications"
+                          : displayDate(job.deadline)}
                         <br />
                         Source checked: {displayDate(job.checked_at)}
                       </p>
@@ -465,7 +534,7 @@ export default function SearchContent({
                 <h2>No current matches.</h2>
                 <p>
                   {scholarship
-                    ? "Try fewer filters or choose All Scholsec notices to include the closed archive and notices without a confirmed deadline."
+                    ? "Try fewer filters, another funding type, or a different application status. All opportunities & archived notices includes the archive and notices with unconfirmed deadlines."
                     : "Try fewer filters. We do not substitute unrelated countries or expired listings. Coverage is growing as more sources pass our checks."}
                 </p>
                 <Link

@@ -23,7 +23,7 @@ export async function generateMetadata({
     jobs: "Jobs in Ghana",
     early: "Internships and graduate opportunities in Ghana",
     remote: "Remote jobs accepting Ghana-based applicants",
-    scholarships: "Scholarships for Ghanaians",
+    scholarships: "Scholarships and research funding for Ghanaians",
   };
   const filtered = [...p.keys()].some((k) => k !== "category");
   let hasResults = false;

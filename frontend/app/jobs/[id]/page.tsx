@@ -6,7 +6,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JobActions from "@/components/JobActions";
 import { getJob } from "@/lib/jobs-server";
-import { displayDate, experienceLevels, studyLevels } from "@/lib/ghana";
+import {
+  displayDate,
+  experienceLevels,
+  studyLevels,
+  scholarshipTypes,
+} from "@/lib/ghana";
 import { jobSchema } from "@/lib/job-metadata";
 type Props = {
   params: Promise<{ id: string }>;
@@ -80,9 +85,13 @@ export default async function Details({ params, searchParams }: Props) {
             <div className="job-tags">
               {job.remote && <span className="tag">Remote from Ghana</span>}
               <span className="tag">
-                {job.job_type === "unspecified"
-                  ? "Employment type not stated"
-                  : job.job_type}
+                {job.category === "scholarships"
+                  ? scholarshipTypes.find(
+                      ([key]) => key === job.job_type,
+                    )?.[1] || "Funding notice"
+                  : job.job_type === "unspecified"
+                    ? "Employment type not stated"
+                    : job.job_type}
               </span>
               {job.category === "scholarships" && (
                 <span className="tag">
@@ -100,7 +109,11 @@ export default async function Details({ params, searchParams }: Props) {
         <dl className="job-facts">
           <div>
             <dt>Application deadline</dt>
-            <dd>{displayDate(job.deadline)}</dd>
+            <dd>
+              {job.application_window === "rolling"
+                ? "Rolling applications"
+                : displayDate(job.deadline)}
+            </dd>
           </div>
           <div>
             <dt>Last source check</dt>
@@ -128,14 +141,16 @@ export default async function Details({ params, searchParams }: Props) {
               </dd>
             </div>
           )}
-          <div>
-            <dt>Listed salary</dt>
-            <dd>
-              {job.salary_min != null || job.salary_max != null
-                ? `${job.salary_currency || "Currency not stated"} ${job.salary_min?.toLocaleString() || ""}${job.salary_max != null ? ` to ${job.salary_max.toLocaleString()}` : ""}${job.salary_period ? ` per ${job.salary_period}` : " · period not stated"}`
-                : "Not stated by the source"}
-            </dd>
-          </div>
+          {job.category !== "scholarships" && (
+            <div>
+              <dt>Listed salary</dt>
+              <dd>
+                {job.salary_min != null || job.salary_max != null
+                  ? `${job.salary_currency || "Currency not stated"} ${job.salary_min?.toLocaleString() || ""}${job.salary_max != null ? ` to ${job.salary_max.toLocaleString()}` : ""}${job.salary_period ? ` per ${job.salary_period}` : " · period not stated"}`
+                  : "Not stated by the source"}
+              </dd>
+            </div>
+          )}
         </dl>
         <section className="detail-description">
           <h2>
@@ -145,9 +160,12 @@ export default async function Details({ params, searchParams }: Props) {
           </h2>
           {job.category === "scholarships" && (
             <p>
-              {job.eligibility_note}. Published by the Ghana Scholarships
-              Authority. This platform is independent.
+              {job.eligibility_note} Published by {job.source}. This platform is
+              independent.
             </p>
+          )}
+          {job.category === "scholarships" && job.deadline_note && (
+            <p>Source deadline information: {job.deadline_note}</p>
           )}
           <p className="job-description-copy">{job.description}</p>
           {job.description_kind === "source_summary" && (
@@ -158,7 +176,8 @@ export default async function Details({ params, searchParams }: Props) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Read the full requirements and instructions at {job.source} <Icon name="arrow-up-right" />
+                Read the full requirements and instructions at {job.source}{" "}
+                <Icon name="arrow-up-right" />
               </a>
             </p>
           )}

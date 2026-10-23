@@ -10,6 +10,8 @@ from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Header
 from database.supabase_client import supabase
 import ghana_sources
 import employer_sources
+import academic_sources
+import jobweb_source
 from listing_quality import enrich, deduplicate, identity
 
 router = APIRouter()
@@ -41,7 +43,7 @@ REGIONS = {
     "Volta": ["ho", "hohoe", "keta", "aflao"],
     "Northern": ["tamale", "yendi"],
     "Upper East": ["bolgatanga", "navrongo", "bawku"],
-    "Upper West": ["wa", "lawra"],
+    "Upper West": ["wa", "lawra", "tumu", "jirapa"],
     "Bono": ["sunyani", "berekum"],
     "Bono East": ["techiman", "kintampo", "atebubu"],
     "Ahafo": ["goaso", "kenyasi"],
@@ -73,6 +75,7 @@ GREENHOUSE = {
     "scangroup": "Scangroup / Ogilvy",
     "wavemm1": "Wave",
     "flyzipline": "Zipline",
+    "alxafrica": "ALX Africa",
 }
 HEADERS = {
     "User-Agent": "jobs.ac.ghana/2.0 (+https://zagjobsearch.vercel.app; public vacancy checks)"
@@ -143,14 +146,17 @@ def classify(title, employment=""):
     for key, pattern in [
         ("internship", r"\bintern(?:ship)?\b"),
         ("apprenticeship", r"apprentice"),
-        ("graduate", r"graduate (?:programme|program|trainee)|national service"),
+        (
+            "graduate",
+            r"graduate (?:programme|program|(?:management )?trainee)|national service",
+        ),
     ]:
         if re.search(pattern, t + " " + e):
             return key
     if re.search(r"part[ -]?time", e + " " + t):
         return "part-time"
     if re.search(
-        r"contract|fixed[ -]term|\bftc\b|consultan|freelance|temporary", e + " " + t
+        r"\bcontract\b|fixed[ -]term|\bftc\b|consultan|freelance|temporary", e + " " + t
     ):
         return "contract"
     if "permanent" in e:
@@ -405,7 +411,11 @@ def scholarship_state(job):
         and deadline < NOW()
     ):
         return "closed"
-    return "open" if deadline else "unconfirmed"
+    return (
+        "open"
+        if deadline or job.get("application_window") == "rolling"
+        else "unconfirmed"
+    )
 
 
 def parse_scholarship(soup, url):
@@ -492,7 +502,7 @@ def parse_scholarship(soup, url):
         "remote": False,
         "category": "scholarships",
         "checked_at": NOW().isoformat(),
-        "check_url": None,
+        "check_url": url,
         "study_levels": levels,
         "study_destination": (
             "ghana" if local else "abroad" if abroad else "unspecified"
@@ -691,6 +701,8 @@ async def collect(archive_page=9, tracked=None):
             mining(client),
             *ghana_sources.tasks(client, archive_page),
             *employer_sources.tasks(client),
+            *academic_sources.tasks(client),
+            jobweb_source.collect(client),
         ]
         names = [
             *["smart:" + b for b in SMART],
@@ -699,6 +711,8 @@ async def collect(archive_page=9, tracked=None):
             "anglogold",
             *ghana_sources.SOURCE_NAMES,
             *employer_sources.SOURCE_NAMES,
+            *academic_sources.SOURCE_NAMES,
+            *jobweb_source.SOURCE_NAMES,
         ]
         result = await asyncio.gather(
             *(asyncio.wait_for(task, 130) for task in tasks), return_exceptions=True
@@ -798,7 +812,11 @@ async def refresh():
     closed = [
         r["id"]
         for r in old
-        if r["source_key"] in successful - ghana_sources.WINDOWED_SOURCES
+        if r["source_key"]
+        in successful
+        - ghana_sources.WINDOWED_SOURCES
+        - academic_sources.WINDOWED_SOURCES
+        - {"jobweb-ghana"}
         and r["id"] not in ids
     ]
     for offset in range(0, len(closed), 200):
@@ -866,6 +884,8 @@ def catalogue_sources():
     health = {x["source"]: x for x in state.get("summary", [])}
     registry = dict(ghana_sources.SOURCE_INFO)
     registry.update(employer_sources.SOURCE_INFO)
+    registry.update(academic_sources.SOURCE_INFO)
+    registry.update(jobweb_source.SOURCE_INFO)
     for board in SMART:
         registry["smart:" + board] = (
             board.replace("Deloitte6", "Deloitte")
@@ -1098,6 +1118,12 @@ async def catalogue_details(job_id: str, verify: bool = False):
             "telecel.zohorecruit.com",
             "api.ashbyhq.com",
             "gh.fido.money",
+            "erp.mpharma.com",
+            "scholarships.gov.gh",
+            "www.daad-ghana.org",
+            "rid.ug.edu.gh",
+            "ogr.knust.edu.gh",
+            "jobwebghana.com",
         ]
     ):
         try:
@@ -1105,7 +1131,7 @@ async def catalogue_details(job_id: str, verify: bool = False):
                 timeout=10, follow_redirects=True, headers=HEADERS
             ) as client:
                 r = await client.get(check)
-                if host in ["api.ashbyhq.com", "gh.fido.money"]:
+                if host in ["api.ashbyhq.com", "gh.fido.money", "erp.mpharma.com"]:
                     if r.status_code != 200:
                         raise HTTPException(
                             503,
@@ -1119,6 +1145,46 @@ async def catalogue_details(job_id: str, verify: bool = False):
                         raise HTTPException(
                             410,
                             "The employer no longer lists this Ghana opportunity as open.",
+                        )
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
+                if host in [
+                    "scholarships.gov.gh",
+                    "www.daad-ghana.org",
+                    "rid.ug.edu.gh",
+                    "ogr.knust.edu.gh",
+                ]:
+                    if r.status_code != 200:
+                        raise HTTPException(
+                            503,
+                            "The academic source could not confirm this notice. Please try again later.",
+                        )
+                    fresh = await academic_sources.recheck(client, j, r)
+                    if not fresh:
+                        raise HTTPException(
+                            503,
+                            "Ghana eligibility for this funding call needs another check.",
+                        )
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
+                if host == "jobwebghana.com" and r.status_code == 200:
+                    fresh = jobweb_source.parse_detail(
+                        BeautifulSoup(r.text, "html.parser"), check
+                    )
+                    if not fresh:
+                        raise HTTPException(
+                            410,
+                            "The board could not confirm a current Ghana application window for this vacancy.",
                         )
                     j.update(
                         {

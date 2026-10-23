@@ -15,7 +15,8 @@ export default async function CoverageOverview() {
       <p>
         {c.categories.jobs || 0} Ghana jobs · {c.categories.early || 0}{" "}
         early-career opportunities · {c.categories.remote || 0} Ghana-eligible
-        remote roles · {c.categories.scholarships || 0} open scholarship notices
+        remote roles · {c.categories.scholarships || 0} open study & research
+        funding notices
       </p>
       <p>
         Counts change as sources publish and close opportunities. A region
