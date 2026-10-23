@@ -48,12 +48,12 @@ const pathways = [
     number: "03",
   },
   {
-    title: "I’m looking for a scholarship",
+    title: "I’m looking for study or research funding",
     description:
-      "Browse Scholsec notices by study level, destination and application status.",
+      "Explore scholarships, research grants and fellowships by level, source and application status.",
     href: "/search?category=scholarships",
     image: "/images/ghana-students.jpg",
-    label: "Explore scholarships",
+    label: "Explore funding opportunities",
     number: "04",
   },
 ];
@@ -125,7 +125,10 @@ export default function Home() {
                   the full details, then apply on the original website.
                 </p>
                 <Link href="/search" className="portal-text-link">
-                  View all opportunities <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
+                  View all opportunities{" "}
+                  <span aria-hidden="true">
+                    <Icon name="arrow-up-right" />
+                  </span>
                 </Link>
               </div>
             </div>
@@ -170,7 +173,10 @@ export default function Home() {
                     <h3>{path.title}</h3>
                     <p>{path.description}</p>
                     <span className="portal-card-link">
-                      {path.label} <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
+                      {path.label}{" "}
+                      <span aria-hidden="true">
+                        <Icon name="arrow-up-right" />
+                      </span>
                     </span>
                   </div>
                 </Link>
@@ -214,9 +220,18 @@ export default function Home() {
                 need to remember.
               </p>
               <ul className="portal-check-list">
-                <li><Icon name="check" />Save the role, company and original application link.</li>
-                <li><Icon name="check" />Update your status as your application progresses.</li>
-                <li><Icon name="check" />Keep notes, contacts and follow-up dates together.</li>
+                <li>
+                  <Icon name="check" />
+                  Save the role, company and original application link.
+                </li>
+                <li>
+                  <Icon name="check" />
+                  Update your status as your application progresses.
+                </li>
+                <li>
+                  <Icon name="check" />
+                  Keep notes, contacts and follow-up dates together.
+                </li>
               </ul>
               <div className="portal-actions">
                 <Link href="/tracker" className="portal-button green">
@@ -279,7 +294,9 @@ export default function Home() {
               ))}
             </div>
             <div className="portal-source-note">
-              <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
+              <span aria-hidden="true">
+                <Icon name="arrow-up-right" />
+              </span>
               <div>
                 <strong>Clear sources. Informed applications.</strong>
                 <p>

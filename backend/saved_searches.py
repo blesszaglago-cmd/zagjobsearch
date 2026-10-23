@@ -24,6 +24,7 @@ ALLOWED = {
     "destination",
     "funding",
     "availability",
+    "source",
     "salary_min",
     "salary_max",
     "salary_currency",

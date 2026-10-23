@@ -22,7 +22,9 @@ export default function Header() {
           <Link href="/search?category=early&job_type=internship">
             Internships
           </Link>
-          <Link href="/search?category=scholarships">Scholarships</Link>
+          <Link href="/search?category=scholarships">
+            Scholarships & research
+          </Link>
         </div>
         <AccountNav />
       </nav>
@@ -32,7 +34,9 @@ export default function Header() {
           Internships
         </Link>
         <Link href="/tracker">Tracker</Link>
-        <Link href="/search?category=scholarships">Scholarships</Link>
+        <Link href="/search?category=scholarships">
+          Scholarships & research
+        </Link>
       </nav>
     </header>
   );

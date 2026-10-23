@@ -20,7 +20,7 @@ export const categories = [
   ["jobs", "Jobs in Ghana"],
   ["early", "Early careers"],
   ["remote", "Remote from Ghana"],
-  ["scholarships", "Scholarships"],
+  ["scholarships", "Scholarships & research"],
 ];
 export const types: Record<string, string[][]> = {
   jobs: [
@@ -57,6 +57,22 @@ export const studyLevels = [
   ["masters", "Master’s"],
   ["mphil", "MPhil"],
   ["phd", "PhD"],
+  ["postdoc", "Postdoctoral research"],
+];
+export const scholarshipTypes = [
+  ["all", "All funding opportunities"],
+  ["scholarship", "Degree scholarships"],
+  ["research-grant", "Research grants"],
+  ["fellowship", "Fellowships"],
+  ["research-award", "Research prizes & awards"],
+  ["training", "Funded courses & training"],
+  ["other-funding", "Other funding & exchanges"],
+];
+export const scholarshipSources = [
+  ["scholarships-authority", "ScholSec / Scholarships Authority"],
+  ["daad-ghana", "DAAD Ghana funding database"],
+  ["ug-research", "University of Ghana research calls"],
+  ["knust-research", "KNUST research calls"],
 ];
 export function displayDate(value?: string | number | null) {
   if (!value) return "Not provided";

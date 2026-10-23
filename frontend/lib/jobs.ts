@@ -2,6 +2,8 @@ export type Job = {
   listing_status?: "open" | "closed" | "unconfirmed";
   can_apply?: boolean;
   eligibility_note?: string;
+  deadline_note?: string;
+  application_window?: string;
   category?: string;
   regions?: string[];
   checked_at?: string;

@@ -52,6 +52,91 @@ class RestoreDatabaseTests(unittest.TestCase):
             autocommit=True,
         )
 
+    def test_academic_catalogue_migration_filters_windows_and_privileges(self):
+        from datetime import datetime, timedelta, timezone
+        from pathlib import Path
+        from psycopg.types.json import Jsonb
+
+        with self.connect() as connection:
+            connection.execute("""
+                do $$ begin
+                  if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if;
+                  if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if;
+                  if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role; end if;
+                end $$;
+                create table public.job_catalogue(
+                  id text primary key, source_key text, payload jsonb,
+                  status text default 'active', first_seen_at timestamptz default now(),
+                  last_checked_at timestamptz default now(), deadline timestamptz
+                );
+                alter table public.job_catalogue enable row level security;
+            """)
+            migration = (
+                Path(__file__).resolve().parents[2]
+                / "supabase/migrations/20261022223645_academic_opportunity_filters.sql"
+            )
+            connection.execute(migration.read_text())
+            now = datetime.now(timezone.utc)
+            for identity, provider, window, deadline in [
+                ("dated", "university", "deadline", now + timedelta(days=2)),
+                ("rolling", "university", "rolling", None),
+                ("unknown", "university", "not_provided", None),
+                ("expired", "authority", "deadline", now - timedelta(days=2)),
+            ]:
+                payload = {
+                    "id": identity,
+                    "title": "Research funding",
+                    "company": "Test provider",
+                    "description": "An eligible academic call",
+                    "category": "scholarships",
+                    "job_type": "research-grant",
+                    "study_levels": [],
+                    "application_window": window,
+                    "check_url": "https://example.com/internal-check",
+                }
+                connection.execute(
+                    "insert into public.job_catalogue(id,source_key,payload,deadline) values(%s,%s,%s,%s)",
+                    (identity, provider, Jsonb(payload), deadline),
+                )
+
+            def search(**filters):
+                return connection.execute(
+                    "select public.search_ghana_catalogue(%s)",
+                    (Jsonb({"category": "scholarships", **filters}),),
+                ).fetchone()[0]
+
+            opened = search()
+            self.assertEqual({j["id"] for j in opened["jobs"]}, {"dated", "rolling"})
+            self.assertEqual(
+                opened["scholarship_counts"], {"open": 2, "unconfirmed": 1, "closed": 1}
+            )
+            self.assertTrue(all(j["can_apply"] for j in opened["jobs"]))
+            self.assertTrue(all("check_url" not in j for j in opened["jobs"]))
+            self.assertEqual(search(availability="all")["total"], 4)
+            self.assertEqual(search(availability="all", source="authority")["total"], 1)
+            self.assertEqual(search(job_type="fellowship")["total"], 0)
+            self.assertEqual(search(source="' OR true --")["total"], 0)
+            self.assertEqual(
+                search(availability="unconfirmed")["jobs"][0]["id"], "unknown"
+            )
+            for role, expected in [
+                ("anon", False),
+                ("authenticated", False),
+                ("service_role", True),
+            ]:
+                self.assertEqual(
+                    connection.execute(
+                        "select has_function_privilege(%s,'public.search_ghana_catalogue(jsonb)','execute')",
+                        (role,),
+                    ).fetchone()[0],
+                    expected,
+                )
+            self.assertFalse(
+                connection.execute(
+                    "select prosecdef from pg_proc where oid='public.search_ghana_catalogue(jsonb)'::regprocedure"
+                ).fetchone()[0]
+            )
+
     def test_all_values_ids_history_json_and_rls_survive(self):
         data = fixture()
         result = restore.restore_snapshot(data, self.database, self.password)
