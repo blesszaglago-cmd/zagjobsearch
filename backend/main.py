@@ -173,8 +173,16 @@ async def security_headers(request, call_next):
         if os.getenv("VERCEL")
         else "frame-ancestors 'none'"
     )
-    if request.url.path.startswith(("/account", "/auth", "/login", "/signup")):
+    apply_check = (
+        request.url.path.startswith("/catalogue/") and "verify" in request.query_params
+    )
+    if (
+        request.url.path.startswith(("/account", "/auth", "/login", "/signup"))
+        or apply_check
+    ):
         response.headers["Cache-Control"] = "no-store"
+    if apply_check:
+        response.headers.append("Vary", "Authorization")
     return response
 
 

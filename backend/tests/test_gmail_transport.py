@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
+from email.utils import parsedate_to_datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs
@@ -17,7 +18,6 @@ import httpx
 
 import gmail_transport
 import mailer
-
 
 ENV = {
     "EMAIL_PROVIDER": "gmail_api",
@@ -98,9 +98,13 @@ class GmailTransportTests(unittest.TestCase):
             return httpx.Response(200, json={"id": "accepted-message"})
 
         client = httpx.Client(transport=httpx.MockTransport(respond))
-        with patch.dict(os.environ, ENV), patch.object(
-            gmail_transport.httpx, "Client", return_value=client
-        ) as factory, patch.object(mailer, "open_smtp") as smtp:
+        with (
+            patch.dict(os.environ, ENV),
+            patch.object(
+                gmail_transport.httpx, "Client", return_value=client
+            ) as factory,
+            patch.object(mailer, "open_smtp") as smtp,
+        ):
             try:
                 yield requests, factory, smtp
             finally:
@@ -186,8 +190,9 @@ class GmailTransportTests(unittest.TestCase):
     def test_unicode_mime_and_token_reuse_for_two_accepted_queue_messages(self):
         first, second = queued(), queued(id="delivery-2")
         db, updates = database([first, second])
-        with self.transport() as (requests, _, smtp), patch.object(
-            mailer, "supabase", db
+        with (
+            self.transport() as (requests, _, smtp),
+            patch.object(mailer, "supabase", db),
         ):
             self.assertEqual(
                 mailer.deliver(), {"sent": 2, "failed": 0, "configured": True}
@@ -197,16 +202,26 @@ class GmailTransportTests(unittest.TestCase):
             sum(str(r.url) == gmail_transport.TOKEN_URL for r in requests), 1
         )
         for request, item in zip(requests[1:], [first, second]):
-            self.assertEqual(request.headers["authorization"], "Bearer unit-access-token")
+            self.assertEqual(
+                request.headers["authorization"], "Bearer unit-access-token"
+            )
             payload = json.loads(request.content)
             message = BytesParser(policy=policy.default).parsebytes(
                 base64.urlsafe_b64decode(payload["raw"])
             )
             self.assertEqual(str(message["To"]), item["recipient"])
-            self.assertEqual(message["From"].addresses[0].addr_spec, "sender@example.com")
+            self.assertEqual(
+                message["From"].addresses[0].addr_spec, "sender@example.com"
+            )
             self.assertEqual(message["From"].addresses[0].display_name, "jobs.ac.ghana")
             self.assertEqual(str(message["Subject"]), item["subject"])
-            self.assertEqual(str(message["Message-ID"]), f"<{item['id']}@jobs-ac-ghana>")
+            self.assertEqual(str(message["Message-ID"]), f"<{item['id']}@example.com>")
+            self.assertEqual(len(message.get_all("Date")), 1)
+            self.assertIsNotNone(parsedate_to_datetime(message["Date"]).tzinfo)
+            self.assertEqual(
+                message["Reply-To"].addresses[0].addr_spec, "sender@example.com"
+            )
+            self.assertEqual(message["Auto-Submitted"], "auto-generated")
             self.assertEqual(message.get_content().strip(), item["body"])
         self.assertEqual(
             [p["status"] for name, p in updates if name == "email_outbox"],
@@ -249,13 +264,16 @@ class GmailTransportTests(unittest.TestCase):
         ]
         for url, response, expected in cases:
             with self.subTest(url=url, status=response.status_code):
+
                 def handler(request):
                     return response if str(request.url) == url else None
 
                 db, updates = database([queued()])
-                with self.transport(handler) as (requests, _, smtp), patch.object(
-                    mailer, "supabase", db
-                ), self.assertLogs(level="WARNING") as logs:
+                with (
+                    self.transport(handler) as (requests, _, smtp),
+                    patch.object(mailer, "supabase", db),
+                    self.assertLogs(level="WARNING") as logs,
+                ):
                     result = mailer.deliver()
                 self.assertEqual(result["sent"], 0)
                 self.assertEqual(result["failed"], 1)
@@ -294,9 +312,14 @@ class GmailTransportTests(unittest.TestCase):
             ),
         ]
         for payload in payloads:
-            with self.subTest(payload=payload), self.transport(
-                lambda request: httpx.Response(200, json=payload)
-            ) as (requests, _, smtp):
+            with (
+                self.subTest(payload=payload),
+                self.transport(lambda request: httpx.Response(200, json=payload)) as (
+                    requests,
+                    _,
+                    smtp,
+                ),
+            ):
                 result = mailer.check_email_connection()
                 self.assertFalse(result["authenticated"])
                 self.assertEqual(len(requests), 1)
@@ -314,6 +337,7 @@ class GmailTransportTests(unittest.TestCase):
                 "gmail_api_connection_failed",
             ),
         ]:
+
             def handler(request):
                 if isinstance(failure, Exception):
                     raise failure
@@ -387,7 +411,10 @@ class GmailTransportTests(unittest.TestCase):
                 queued(),
                 {
                     "profiles": [
-                        {"email": "changed@example.com", "email_verified_at": "2026-01-01"}
+                        {
+                            "email": "changed@example.com",
+                            "email_verified_at": "2026-01-01",
+                        }
                     ]
                 },
             ),
@@ -443,8 +470,9 @@ class GmailTransportTests(unittest.TestCase):
         message["To"] = "recipient@example.com"
         message["From"] = ENV["EMAIL_FROM"]
         message.set_content("Synthetic test")
-        with self.transport(handler) as (requests, _, _), patch.object(
-            gmail_transport.time, "monotonic", side_effect=lambda: now[0]
+        with (
+            self.transport(handler) as (requests, _, _),
+            patch.object(gmail_transport.time, "monotonic", side_effect=lambda: now[0]),
         ):
             connection = gmail_transport.GmailTransport()
             connection.send_message(message)

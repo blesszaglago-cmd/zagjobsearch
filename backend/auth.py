@@ -4,6 +4,7 @@ import hashlib
 import secrets
 import hmac
 import logging
+import re
 from datetime import date
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from fastapi import HTTPException
@@ -12,6 +13,15 @@ from sessions import issue_session
 
 ITERATIONS = 600_000
 logger = logging.getLogger(__name__)
+
+
+def application_return_path(value):
+    """Only return to a public listing, never a caller-selected external URL."""
+    return (
+        value
+        if isinstance(value, str) and re.fullmatch(r"/jobs/[a-f0-9]{32}", value)
+        else ""
+    )
 
 
 class SignupRequest(BaseModel):
@@ -23,6 +33,12 @@ class SignupRequest(BaseModel):
     age_confirmed: bool = False
     country: str = Field(default="GH", min_length=2, max_length=2)
     accepted_terms: bool
+    next_path: str = Field(default="", max_length=200)
+
+    @field_validator("next_path")
+    @classmethod
+    def safe_return_path(cls, value):
+        return application_return_path(value)
 
     @field_validator("email")
     @classmethod
@@ -183,7 +199,7 @@ def validate_signup(data):
         from account_security import send_account_link
 
         try:
-            send_account_link(user, "verify")
+            send_account_link(user, "verify", next_path=data.next_path)
         except Exception:
             # The profile already exists. Keep verification required and explain
             # recovery without logging provider replies, addresses or tokens.

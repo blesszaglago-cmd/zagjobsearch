@@ -14,7 +14,8 @@ import time
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from database.supabase_client import supabase
 from sessions import current_user, issue_session, bearer, session_payload
-from auth import find_email, hash_password, verify_password
+from auth import find_email, hash_password, verify_password, application_return_path
+from urllib.parse import urlencode
 from mailer import email_enabled, enqueue, deliver
 from security import rate_limit
 
@@ -36,7 +37,7 @@ def require_password(user, password):
         )
 
 
-def send_account_link(user, purpose, target=None):
+def send_account_link(user, purpose, target=None, next_path=""):
     if not email_enabled():
         raise HTTPException(
             503,
@@ -58,7 +59,9 @@ def send_account_link(user, purpose, target=None):
         }
     ).execute()
     route = "reset-password" if purpose == "reset" else "verify-email"
-    link = f"{os.getenv('FRONTEND_URL', 'https://zagjobsearch.vercel.app').rstrip('/')}/{route}#token={token}&purpose={purpose}"
+    continuation = application_return_path(next_path)
+    query = "?" + urlencode({"next": continuation}) if continuation else ""
+    link = f"{os.getenv('FRONTEND_URL', 'https://zagjobsearch.vercel.app').rstrip('/')}/{route}{query}#token={token}&purpose={purpose}"
     subject = (
         "Reset your jobs.ac.ghana password"
         if purpose == "reset"
@@ -68,7 +71,7 @@ def send_account_link(user, purpose, target=None):
         f"account:{digest}",
         email,
         subject,
-        f"{subject}\n\nOpen this link within 30 minutes:\n{link}\n\nIf you did not request this, ignore this email.",
+        f"{subject}\n\nYou requested this account link on jobs.ac.ghana, the Ghana jobs, internships and scholarships website at zagjobsearch.vercel.app.\n\nOpen this link within 30 minutes:\n{link}\n\nAfter completing this step, log in to continue.\n\nIf you did not request this, ignore this email. For help, reply to this message.\n\njobs.ac.ghana\nhttps://zagjobsearch.vercel.app",
         user["id"],
         expires_at=(datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat(),
     )
@@ -83,6 +86,12 @@ def send_account_link(user, purpose, target=None):
 class EmailRequest(BaseModel):
     email: EmailStr
     purpose: str = "reset"
+    next_path: str = Field(default="", max_length=200)
+
+    @field_validator("next_path")
+    @classmethod
+    def safe_return_path(cls, value):
+        return application_return_path(value)
 
 
 @router.post("/auth/recovery")
@@ -98,7 +107,7 @@ def recovery(data: EmailRequest, request: Request):
     user = find_email(data.email)
     if user:
         try:
-            send_account_link(user, data.purpose)
+            send_account_link(user, data.purpose, next_path=data.next_path)
         except Exception:
             logging.getLogger(__name__).warning("account_recovery_delivery_deferred")
     return {

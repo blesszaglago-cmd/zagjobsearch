@@ -11,6 +11,12 @@ export class CatalogueRequestError extends Error {
     this.name = "CatalogueRequestError";
   }
 }
+export class JobRequestError extends Error {
+  constructor(public readonly status: number) {
+    super("The original source could not confirm this opportunity.");
+    this.name = "JobRequestError";
+  }
+}
 export const getSearchResult = cache(async function getSearchResult(
   query: string,
 ) {
@@ -53,7 +59,6 @@ export const getJob = cache(async function getJob(
     },
   );
   if (r.status === 404 || r.status === 410) return;
-  if (!r.ok)
-    throw new Error("The original source could not confirm this opportunity.");
+  if (!r.ok) throw new JobRequestError(r.status);
   return r.json();
 });

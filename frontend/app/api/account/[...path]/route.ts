@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { API_URL } from "@/lib/api";
 import { boundedBody, RequestBodyError } from "@/lib/request-body";
 import { clientIpHeaders } from "@/lib/proxy-client";
+import { applicationReturnPath } from "@/lib/application-return";
 const cookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
@@ -59,6 +60,15 @@ async function handle(
         ...cookieOptions,
         maxAge: 600,
       });
+      const nextPath = applicationReturnPath(
+        request.nextUrl.searchParams.get("next"),
+      );
+      if (nextPath)
+        response.cookies.set("zag_oauth_next", nextPath, {
+          ...cookieOptions,
+          maxAge: 600,
+        });
+      else response.cookies.delete("zag_oauth_next");
       return response;
     }
     let endpoint = `${API_URL}/${["login", "signup"].includes(name) ? name : ["config", "recovery", "complete"].includes(name) ? `auth/${name}` : `account/${name}`}`;
@@ -160,7 +170,9 @@ async function handle(
             new URL(
               data.onboarding_complete === false
                 ? "/settings?setup=1"
-                : "/tracker",
+                : applicationReturnPath(
+                    request.cookies.get("zag_oauth_next")?.value,
+                  ) || "/tracker",
               request.url,
             ),
           )
@@ -180,6 +192,7 @@ async function handle(
     if (name === "google/callback") {
       response.cookies.delete("zag_pkce");
       response.cookies.delete("zag_oauth_state");
+      response.cookies.delete("zag_oauth_next");
     }
     return response;
   } catch (error) {
@@ -206,6 +219,7 @@ async function accountHandler(
   ) {
     response.cookies.delete("zag_pkce");
     response.cookies.delete("zag_oauth_state");
+    response.cookies.delete("zag_oauth_next");
   }
   return response;
 }

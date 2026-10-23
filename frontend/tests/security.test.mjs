@@ -9,6 +9,15 @@ import ts from "typescript";
 const require = createRequire(import.meta.url);
 const { NextRequest } = require("next/server");
 const secret = "test-only-cron-key-012345678901234";
+const listingId = "a".repeat(32);
+
+function loadApply(upstream, accountStatus = 200) {
+  return loadRoute("../app/api/jobs/[id]/apply/route.ts", (url, options) =>
+    new URL(url).pathname === "/account/me"
+      ? Response.json({}, { status: accountStatus })
+      : upstream(url, options),
+  );
+}
 
 function loadRoute(
   relative,
@@ -35,6 +44,8 @@ function loadRoute(
       return loadRoute("../lib/request-body.ts", fetchImpl, env);
     if (id === "@/lib/proxy-client")
       return loadRoute("../lib/proxy-client.ts", fetchImpl, env);
+    if (id === "@/lib/application-return")
+      return loadRoute("../lib/application-return.ts", fetchImpl, env);
     if (id === "@/lib/cron-auth")
       return loadRoute("../lib/cron-auth.ts", fetchImpl, env);
     return require(id);
@@ -278,12 +289,14 @@ test("non-JSON account errors provide a usable retry message", async () => {
 
 test("closed and temporarily unavailable Apply responses cannot be cached", async () => {
   for (const status of [404, 503]) {
-    const route = loadRoute("../app/api/jobs/[id]/apply/route.ts", async () =>
+    const route = loadApply(async () =>
       Response.json({ detail: "Unavailable" }, { status }),
     );
     const response = await route.GET(
-      new Request("https://site.example/api/jobs/test/apply"),
-      { params: Promise.resolve({ id: "test" }) },
+      new NextRequest(`https://site.example/api/jobs/${listingId}/apply`, {
+        headers: { cookie: "zag_session=test-only" },
+      }),
+      { params: Promise.resolve({ id: listingId }) },
     );
     assert.equal(response.status, status === 404 ? 410 : 503);
     assert.equal(response.headers.get("cache-control"), "no-store");
@@ -292,14 +305,20 @@ test("closed and temporarily unavailable Apply responses cannot be cached", asyn
 
 test("browser Apply failures lead to a friendly page while JSON clients keep their status", async () => {
   for (const status of [404, 503]) {
-    const route = loadRoute("../app/api/jobs/[id]/apply/route.ts", async () =>
+    const route = loadApply(async () =>
       Response.json({ detail: "Unavailable" }, { status }),
     );
-    const request = new Request("https://site.example/api/jobs/test/apply", {
-      headers: { accept: "text/html,application/xhtml+xml" },
-    });
+    const request = new NextRequest(
+      `https://site.example/api/jobs/${listingId}/apply`,
+      {
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          cookie: "zag_session=test-only",
+        },
+      },
+    );
     const response = await route.GET(request, {
-      params: Promise.resolve({ id: "test" }),
+      params: Promise.resolve({ id: listingId }),
     });
     assert.equal(response.status, 303);
     assert.equal(
@@ -308,23 +327,26 @@ test("browser Apply failures lead to a friendly page while JSON clients keep the
     );
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
-    assert.equal(response.headers.get("vary"), "Accept");
+    assert.equal(response.headers.get("vary"), "Accept, Cookie");
   }
 });
 
 test("browser Apply still redirects directly to a confirmed external posting", async () => {
-  const route = loadRoute("../app/api/jobs/[id]/apply/route.ts", async () =>
+  const route = loadApply(async () =>
     Response.json({
       id: "test",
       can_apply: true,
       url: "https://employer.example/jobs/123",
     }),
   );
-  const request = new Request("https://site.example/api/jobs/test/apply", {
-    headers: { accept: "text/html" },
-  });
+  const request = new NextRequest(
+    `https://site.example/api/jobs/${listingId}/apply`,
+    {
+      headers: { accept: "text/html", cookie: "zag_session=test-only" },
+    },
+  );
   const response = await route.GET(request, {
-    params: Promise.resolve({ id: "test" }),
+    params: Promise.resolve({ id: listingId }),
   });
   assert.equal(response.status, 302);
   assert.equal(
@@ -446,15 +468,156 @@ test("Apply refuses URLs with credentials, insecure schemes or unusual ports", a
     "javascript:alert(1)",
     "http://employer.example/job",
   ]) {
-    const route = loadRoute("../app/api/jobs/[id]/apply/route.ts", async () =>
+    const route = loadApply(async () =>
       Response.json({ can_apply: true, url }),
     );
     const response = await route.GET(
-      new Request("https://site.example/api/jobs/test/apply"),
-      { params: Promise.resolve({ id: "test" }) },
+      new NextRequest(`https://site.example/api/jobs/${listingId}/apply`, {
+        headers: { cookie: "zag_session=test-only" },
+      }),
+      { params: Promise.resolve({ id: listingId }) },
     );
     assert.equal(response.status, 503);
     assert.equal(response.headers.get("location"), null);
+  }
+});
+
+test("guest Apply requires an account without fetching the posting", async () => {
+  let calls = 0;
+  const route = loadApply(async () => {
+    calls++;
+    throw Error("Guest must not reach source verification");
+  });
+  const context = { params: Promise.resolve({ id: listingId }) };
+  const browser = await route.GET(
+    new NextRequest(`https://site.example/api/jobs/${listingId}/apply`, {
+      headers: { accept: "text/html" },
+    }),
+    context,
+  );
+  assert.equal(browser.status, 303);
+  const target = new URL(browser.headers.get("location"));
+  assert.equal(target.origin, "https://site.example");
+  assert.equal(target.pathname, "/signup");
+  assert.equal(target.searchParams.get("next"), `/jobs/${listingId}`);
+  assert.equal(browser.headers.get("cache-control"), "private, no-store");
+  const json = await route.GET(
+    new NextRequest(`https://site.example/api/jobs/${listingId}/apply`),
+    context,
+  );
+  assert.equal(json.status, 401);
+  assert.match((await json.json()).login_url, /^\/login\?/);
+  assert.equal(calls, 0);
+});
+
+test("Apply forwards the session for server validation and expired sessions return to login", async () => {
+  for (const status of [200, 401, 403]) {
+    let calls = 0;
+    const route = loadApply(async (url, options) => {
+      calls++;
+      assert.equal(new URL(url).pathname, `/catalogue/${listingId}`);
+      assert.equal(new URL(url).searchParams.get("verify"), "true");
+      assert.equal(options.headers.Authorization, "Bearer test-only-session");
+      return Response.json(
+        { can_apply: true, url: "https://employer.example/open-role" },
+        { status },
+      );
+    });
+    const response = await route.GET(
+      new NextRequest(`https://site.example/api/jobs/${listingId}/apply`, {
+        headers: {
+          accept: "text/html",
+          cookie: "zag_session=test-only-session",
+        },
+      }),
+      { params: Promise.resolve({ id: listingId }) },
+    );
+    const target = new URL(response.headers.get("location"));
+    if (status === 200) {
+      assert.equal(response.status, 302);
+      assert.equal(target.toString(), "https://employer.example/open-role");
+    } else {
+      assert.equal(response.status, 303);
+      assert.equal(target.pathname, "/login");
+      assert.equal(target.searchParams.get("next"), `/jobs/${listingId}`);
+    }
+    assert.equal(calls, 1);
+  }
+});
+
+test("account continuations cannot become external redirects or protected actions", () => {
+  const { applicationReturnPath } = loadRoute("../lib/application-return.ts");
+  assert.equal(
+    applicationReturnPath(`/jobs/${listingId}`),
+    `/jobs/${listingId}`,
+  );
+  for (const value of [
+    null,
+    "https://untrusted.example/",
+    "//untrusted.example/",
+    "/\\untrusted.example",
+    "/api/reminders",
+    `/jobs/${listingId}?next=https://untrusted.example/`,
+    `/jobs/${listingId}\n`,
+    "javascript:alert(1)",
+  ])
+    assert.equal(applicationReturnPath(value), undefined);
+});
+
+test("a forged cookie or unavailable account service cannot reach Apply verification", async () => {
+  for (const accountStatus of [401, 403, 500]) {
+    let sourceCalls = 0;
+    const route = loadApply(async () => {
+      sourceCalls++;
+      throw Error("Source must not be called");
+    }, accountStatus);
+    const response = await route.GET(
+      new NextRequest(`https://site.example/api/jobs/${listingId}/apply`, {
+        headers: { cookie: "zag_session=forged" },
+      }),
+      { params: Promise.resolve({ id: listingId }) },
+    );
+    assert.equal(response.status, accountStatus === 500 ? 503 : 401);
+    assert.equal(sourceCalls, 0);
+    assert.equal(response.headers.get("location"), null);
+  }
+});
+
+test("successful OAuth resumes only a safe listing and clears continuation cookies", async () => {
+  for (const next of [`/jobs/${listingId}`, "//untrusted.example/"]) {
+    const route = loadRoute(
+      "../app/api/account/[...path]/route.ts",
+      async (url) => {
+        if (url.endsWith("/auth/config"))
+          return Response.json({
+            supabase_url: "https://auth.example",
+            publishable_key: "test-only-public-key",
+          });
+        if (url.includes("/auth/v1/token"))
+          return Response.json({ access_token: "test-only-provider-token" });
+        return Response.json({
+          access_token: "test-only-session",
+          onboarding_complete: true,
+        });
+      },
+    );
+    const response = await route.GET(
+      new NextRequest(
+        "https://site.example/api/account/google/callback?state=matching-state&code=test-only-code",
+        {
+          headers: {
+            cookie: `zag_oauth_state=matching-state; zag_pkce=test-only-verifier; zag_oauth_next=${encodeURIComponent(next)}`,
+          },
+        },
+      ),
+      { params: Promise.resolve({ path: ["google", "callback"] }) },
+    );
+    assert.equal(response.status, 307);
+    assert.equal(
+      response.headers.get("location"),
+      `https://site.example${next.startsWith("/jobs/") ? next : "/tracker"}`,
+    );
+    assert.match(response.headers.get("set-cookie"), /zag_oauth_next=;/);
   }
 });
 
@@ -471,7 +634,7 @@ test("report requests have a streaming limit and hide upstream server errors", a
       headers: { origin: "https://site.example" },
       body,
     });
-  const context = { params: Promise.resolve({ id: "test" }) };
+  const context = { params: Promise.resolve({ id: listingId }) };
   const large = await route.POST(makeRequest("x".repeat(13000)), context);
   assert.equal(large.status, 413);
   const failed = await route.POST(makeRequest('{"reason":"closed"}'), context);
@@ -482,8 +645,16 @@ test("report requests have a streaming limit and hide upstream server errors", a
 test("browser policy blocks inline event handlers, plugins, frames and base-tag injection", async () => {
   const config = loadRoute("../next.config.ts").default;
   const groups = await config.headers();
-  const csp = groups[0].headers.find((header) => header.key === "Content-Security-Policy").value;
-  for (const directive of ["script-src-attr 'none'", "object-src 'none'", "frame-ancestors 'none'", "base-uri 'none'", "form-action 'self'"])
+  const csp = groups[0].headers.find(
+    (header) => header.key === "Content-Security-Policy",
+  ).value;
+  for (const directive of [
+    "script-src-attr 'none'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+  ])
     assert.ok(csp.includes(directive));
   assert.ok(!csp.includes("unsafe-eval"));
 });

@@ -10,7 +10,7 @@ export default function Header() {
             <span className="ghana-flag" role="img" aria-label="Ghana flag" />
             Independent Ghana opportunity platform.
           </span>
-          <span>Search freely. Apply at the source.</span>
+          <span>Browse freely. Sign in to apply.</span>
         </div>
       </div>
       <nav className="shell nav-inner" aria-label="Main navigation">
