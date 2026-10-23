@@ -51,6 +51,18 @@ SOURCE_INFO = {
 }
 EXTERNAL_SOURCES = [
     (
+        "Opportunities for Youth",
+        "https://opportunitiesforyouth.org/",
+        "Opportunity discovery",
+        "Used to discover calls for review. Connected programmes are checked on their original providers' pages. Its automated feed is blocked, so the full worldwide feed is not imported.",
+    ),
+    (
+        "Opportunities for Africans",
+        "https://www.opportunitiesforafricans.com/",
+        "Opportunity discovery",
+        "Browse additional calls at source. This board's full feed is not imported; country eligibility, application windows and provider conditions need separate checks.",
+    ),
+    (
         "LinkedIn Ghana",
         "https://gh.linkedin.com/jobs/ghana-jobs",
         "Professional network",
@@ -137,6 +149,42 @@ async def page(client, url):
     return BeautifulSoup(response.text, "html.parser")
 
 
+class CheckedListings(list):
+    """Only verified records; incomplete work must not be reported as healthy."""
+
+    def __init__(self, rows=(), *, failed_checks=0):
+        super().__init__(rows)
+        self.failed_checks = failed_checks
+
+
+async def checked_batch(awaitables, timeout):
+    """Keep completed source checks when a bounded discovery window runs out."""
+    tasks = [asyncio.create_task(work) for work in awaitables]
+    if not tasks:
+        return []
+    try:
+        _, pending = await asyncio.wait(tasks, timeout=timeout)
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+    for task in pending:
+        task.cancel()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return [
+        TimeoutError("Source check budget reached") if task in pending else value
+        for task, value in zip(tasks, results)
+    ]
+
+
+def removed(error):
+    return isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (
+        404,
+        410,
+    )
+
+
 def factual_summary(job, source, extra=None):
     """Display facts, not a copy of another board's full article."""
     facts = [
@@ -210,18 +258,20 @@ def parse_current_jobs(soup, url):
 
 
 async def current_jobs(client, archive_page=9):
+    started = asyncio.get_running_loop().time()
     base = "https://www.ghanacurrentjobs.com/"
     links = set()
-    # Eight recent index pages, 160 notices at most, revisited on every refresh.
-    indexes = await asyncio.gather(
-        *(
+    # Eight recent index pages plus four rotating archive pages on every refresh.
+    indexes = await checked_batch(
+        (
             page(client, base if n == 1 else f"{base}page/{n}/")
             for n in list(range(1, 9)) + list(range(archive_page, archive_page + 4))
         ),
-        return_exceptions=True,
+        timeout=35,
     )
     if all(isinstance(s, Exception) for s in indexes):
         raise ValueError("Job board unavailable")
+    failures = sum(isinstance(s, Exception) and not removed(s) for s in indexes)
     for soup in indexes:
         if isinstance(soup, Exception):
             continue
@@ -229,25 +279,20 @@ async def current_jobs(client, archive_page=9):
             u = urljoin(base, a["href"])
             if on_host(u, "www.ghanacurrentjobs.com"):
                 links.add(u.split("#")[0])
-    if not links:
+    if not links or len(links) > 320:
         raise ValueError("Job board format changed")
 
     async def one(url):
         return parse_current_jobs(await page(client, url), url)
 
-    result = await asyncio.gather(
-        *(one(u) for u in sorted(links)), return_exceptions=True
+    result = await checked_batch(
+        (one(u) for u in sorted(links)),
+        timeout=max(1, 100 - (asyncio.get_running_loop().time() - started)),
     )
-    if any(
-        isinstance(j, Exception)
-        and not (
-            isinstance(j, httpx.HTTPStatusError)
-            and j.response.status_code in (404, 410)
-        )
-        for j in result
-    ):
-        raise ValueError("Vacancy details were incomplete or changed format")
-    return "ghana-current-jobs", [j for j in result if isinstance(j, dict)]
+    failures += sum(isinstance(j, Exception) and not removed(j) for j in result)
+    return "ghana-current-jobs", CheckedListings(
+        [j for j in result if isinstance(j, dict)], failed_checks=failures
+    )
 
 
 def parse_hire_item(item):

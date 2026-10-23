@@ -6,77 +6,94 @@ import Footer from "@/components/Footer";
 import { regions } from "@/lib/ghana";
 import { regionSlug } from "@/lib/coverage";
 import { getSearchResult } from "@/lib/jobs-server";
+import type { Job } from "@/lib/jobs";
 type Props = { params: Promise<{ region: string }> };
+const categories = [
+  ["jobs", "Jobs", "jobs"],
+  [
+    "early",
+    "Internships, graduate roles and apprenticeships",
+    "early-career opportunities",
+  ],
+  ["remote", "Ghana-eligible remote roles", "remote roles"],
+] as const;
 async function read(p: Props) {
   const { region } = await p.params;
   const name = regions.find((r) => regionSlug(r) === region);
   if (!name) notFound();
-  const data = await getSearchResult(
-    new URLSearchParams({ category: "jobs", region: name }).toString(),
+  const buckets = await Promise.all(
+    categories.map(async ([key, label, shortLabel]) => ({
+      key,
+      label,
+      shortLabel,
+      data: await getSearchResult(
+        new URLSearchParams({ category: key, region: name }).toString(),
+      ),
+    })),
   );
-  return { name, data, slug: region };
+  return { name, buckets, slug: region };
 }
 export async function generateMetadata(p: Props): Promise<Metadata> {
-  const { name, data, slug } = await read(p);
+  const { name, buckets, slug } = await read(p);
   return {
     title: `Jobs in ${name}, Ghana`,
     description: `Explore source-linked jobs in Ghana's ${name} region. Review deadlines and requirements, apply at the source and track your applications.`,
-    robots: { index: data.total > 0, follow: true },
+    robots: { index: buckets[0].data.total > 0, follow: true },
     alternates: { canonical: `/regions/${slug}` },
   };
 }
 export default async function Region(p: Props) {
-  const { name, data } = await read(p);
+  const { name, buckets } = await read(p);
+  const total = buckets.reduce((sum, bucket) => sum + bucket.data.total, 0);
   return (
     <>
       <Header />
       <main id="main-content" className="shell legal-page">
         <p className="eyebrow">JOBS ACROSS GHANA</p>
-        <h1>Jobs in {name}</h1>
+        <h1>Work and training opportunities in {name}</h1>
         <p>
-          {data.total} current opportunities with a work location mapped to{" "}
-          {name}. Source checks confirm published information, not a guarantee
-          of recruitment.
+          {total} current opportunities mapped to {name}, including nationwide
+          programmes available in this region. Source checks confirm published
+          information; selection and recruitment depend on the provider.
         </p>
-        {data.jobs.map(
-          (j: {
-            id: string;
-            title: string;
-            company: string;
-            location: string;
-          }) => (
-            <article className="saved-search-row" key={j.id}>
-              <div>
-                <h2>
-                  <Link
-                    href={`/jobs/${j.id}?from=${encodeURIComponent(`/search?${new URLSearchParams({ category: "jobs", region: name })}`)}`}
-                  >
-                    {j.title}
-                  </Link>
-                </h2>
-                <p>
-                  {j.company} · {j.location}
-                </p>
-              </div>
-              <Link className="btn-outline" href={`/jobs/${j.id}`}>
-                View details
-              </Link>
-            </article>
-          ),
-        )}
-        {!data.total && (
-          <p>
-            No current verified-location matches are available here. Ghana-wide
-            opportunities without a specific town may still appear in the full
-            search.
-          </p>
-        )}
-        <Link
-          className="btn-primary"
-          href={`/search?${new URLSearchParams({ category: "jobs", region: name })}`}
-        >
-          Search and filter {name} jobs
-        </Link>
+        {buckets.map((bucket) => (
+          <section key={bucket.key} aria-labelledby={`region-${bucket.key}`}>
+            <h2 id={`region-${bucket.key}`}>
+              {bucket.label} · {bucket.data.total}
+            </h2>
+            {bucket.data.jobs.map((j: Job) => (
+              <article className="saved-search-row" key={j.id}>
+                <div>
+                  <h3>
+                    <Link
+                      href={`/jobs/${j.id}?from=${encodeURIComponent(`/search?${new URLSearchParams({ category: bucket.key, region: name })}`)}`}
+                    >
+                      {j.title}
+                    </Link>
+                  </h3>
+                  <p>
+                    {j.company} · {j.location}
+                  </p>
+                </div>
+                <Link className="btn-outline" href={`/jobs/${j.id}`}>
+                  View details
+                </Link>
+              </article>
+            ))}
+            {!bucket.data.total && (
+              <p>
+                No current {bucket.shortLabel} with a confirmed location in this
+                region.
+              </p>
+            )}
+            <Link
+              className="btn-primary"
+              href={`/search?${new URLSearchParams({ category: bucket.key, region: name })}`}
+            >
+              Filter {name} {bucket.shortLabel}
+            </Link>
+          </section>
+        ))}
         <p>
           <Link href="/search">Search all Ghana opportunities</Link> ·{" "}
           <Link href="/sources">Review source coverage</Link>

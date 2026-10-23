@@ -12,6 +12,9 @@ import ghana_sources
 import employer_sources
 import academic_sources
 import jobweb_source
+import funding_sources
+import early_career_sources
+import marriott_source
 from listing_quality import enrich, deduplicate, identity
 
 router = APIRouter()
@@ -76,6 +79,9 @@ GREENHOUSE = {
     "wavemm1": "Wave",
     "flyzipline": "Zipline",
     "alxafrica": "ALX Africa",
+    "wikimedia": "Wikimedia Foundation",
+    "canonical": "Canonical",
+    "givedirectly": "GiveDirectly",
 }
 HEADERS = {
     "User-Agent": "jobs.ac.ghana/2.0 (+https://zagjobsearch.vercel.app; public vacancy checks)"
@@ -143,6 +149,8 @@ def closing(body):
 def classify(title, employment=""):
     t = title.lower()
     e = employment.lower()
+    if re.match(r"^graduate\b", t):
+        return "graduate"
     for key, pattern in [
         ("internship", r"\bintern(?:ship)?\b"),
         ("apprenticeship", r"apprentice"),
@@ -328,49 +336,127 @@ async def smart(client, board):
     return source, [j for j in result if j]
 
 
+def greenhouse_eligibility(board, location, body, title):
+    """Require a Ghana work location or a reviewed employer's hiring statement."""
+    if re.search(r"\bGhana\b", location, re.I):
+        return "Ghana work location stated by the employer"
+    if board == "canonical" and re.search(r"Home based - Worldwide", location, re.I):
+        # Some worldwide-tagged cards still name an exclusive regional role.
+        if re.search(
+            r"\b(?:Americas|APAC|USA|United States|Canada|London|Taiwan|Singapore)\b|\bUS[- ]only\b",
+            title,
+            re.I,
+        ):
+            return None
+        restrictions = re.findall(
+            r"(?:Location\s*:|(?:candidates|applicants) must be based in)(.{0,240})",
+            body,
+            re.I,
+        )
+        if any(
+            re.search(
+                r"\b(?:Americas|APAC|United States|USA|Canada|Europe only|UK only)\b",
+                part,
+                re.I,
+            )
+            and not re.search(
+                r"Africa|all regions|worldwide|global|every (?:region|time zone)|all time zones",
+                part,
+                re.I,
+            )
+            for part in restrictions
+        ):
+            return None
+        return "The employer advertises this home-based role worldwide. Role-specific experience, travel and working-hour requirements apply."
+    if location.strip().casefold() != "remote":
+        return None
+    if re.search(
+        r"Location:\s*Remote\s*\(US\)|(?:candidates|applicants) must (?:be based|reside) in (?:the )?(?:US|USA|United States|UK|Canada)\b",
+        body,
+        re.I,
+    ):
+        return None
+    pattern = {
+        "wikimedia": r"Countries:\s*([^.;]{0,900})",
+        "givedirectly": r"prioritizing hiring in the countries below.{0,240}?:\s*([^.;]{0,900})",
+    }.get(board)
+    match = re.search(pattern, body, re.I) if pattern else None
+    if match and re.search(r"\bGhana\b", match[1], re.I):
+        return "Ghana appears in this role's stated hiring-country list. Local work authorization and the role's other conditions apply."
+    return None
+
+
+def parse_greenhouse(j, board):
+    if not isinstance(j, dict):
+        raise ValueError("Employer vacancy identity changed")
+    loc = j.get("location", {}).get("name", "")
+    body = text(j.get("content"))
+    eligibility = greenhouse_eligibility(board, loc, body, j.get("title", ""))
+    if not eligibility:
+        return None
+    if not isinstance(j.get("id"), int):
+        raise ValueError("Employer vacancy identity changed")
+    target = j.get("absolute_url", "")
+    parsed = urlparse(target)
+    if board in {"canonical", "wikimedia", "givedirectly"} and (
+        parsed.scheme != "https"
+        or parsed.hostname != "job-boards.greenhouse.io"
+        or parsed.port not in (None, 443)
+        or parsed.path != f'/{board}/jobs/{j["id"]}'
+        or parsed.query
+        or parsed.username
+    ):
+        raise ValueError("Employer application URL changed")
+    remote = bool(
+        re.search(r"\bremote\b|Home based - Worldwide", loc, re.I)
+        or board == "wavemm1"
+        and re.search(
+            r"work remotely|remote position|remote role|remote-first", body, re.I
+        )
+    )
+    job = make_job(
+        "greenhouse:" + board,
+        j["id"],
+        j["title"],
+        GREENHOUSE[board],
+        (
+            loc
+            if re.search(r"\bGhana\b", loc, re.I)
+            else "Remote from Ghana (" + loc + ")"
+        ),
+        body,
+        target,
+        j.get("updated_at"),
+        employment=" ".join(
+            str(m.get("value") or "")
+            for m in (j.get("metadata") or [])
+            if re.search("employment|contract", m.get("name", ""), re.I)
+        ),
+        remote=remote,
+        check_url=f'https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{j["id"]}',
+        active_confirmed=True,
+    )
+    if job:
+        job["date_kind"] = "source_updated"
+        job["eligibility_note"] = eligibility
+        job["source_location_label"] = loc
+        if board in {"wikimedia", "givedirectly"}:
+            # Their standard pay examples apply to the US, UK or Kenya. Do not
+            # display those figures as the salary offered to a Ghana applicant.
+            for key in ["salary_min", "salary_max", "salary_currency", "salary_period"]:
+                job[key] = None
+    return job
+
+
 async def greenhouse(client, board):
-    source = "greenhouse:" + board
     d = await json_get(
         client, f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true"
     )
-    jobs = []
     if not isinstance(d.get("jobs"), list):
         raise ValueError("Employer feed format changed")
-    for j in d.get("jobs", []):
-        loc = j.get("location", {}).get("name", "")
-        if not re.search(r"\bGhana\b", loc, re.I):
-            continue
-        body = text(j.get("content"))
-        remote = bool(
-            re.search(r"\bremote\b", loc, re.I)
-            or board == "wavemm1"
-            and re.search(
-                r"work remotely|remote position|remote role|remote-first", body, re.I
-            )
-        )
-        # Updated timestamp is explicitly labelled as source updated, never as date posted.
-        job = make_job(
-            source,
-            j["id"],
-            j["title"],
-            GREENHOUSE[board],
-            loc,
-            body,
-            j["absolute_url"],
-            j.get("updated_at"),
-            employment=" ".join(
-                str(m.get("value") or "")
-                for m in (j.get("metadata") or [])
-                if re.search("employment|contract", m.get("name", ""), re.I)
-            ),
-            remote=remote,
-            check_url=f'https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{j["id"]}',
-            active_confirmed=True,
-        )
-        if job:
-            job["date_kind"] = "source_updated"
-            jobs.append(job)
-    return source, jobs
+    return "greenhouse:" + board, [
+        job for row in d["jobs"] if (job := parse_greenhouse(row, board))
+    ]
 
 
 async def html_get(client, url):
@@ -668,7 +754,7 @@ class PublicSourceClient:
 
     def __init__(self, client):
         self.client = client
-        self.slots = asyncio.Semaphore(12)
+        self.slots = asyncio.Semaphore(24)
         self.hosts = {}
 
     async def get(self, url, **kwargs):
@@ -691,7 +777,7 @@ async def collect(archive_page=9, tracked=None):
         timeout=12,
         follow_redirects=True,
         headers=HEADERS,
-        limits=httpx.Limits(max_connections=12),
+        limits=httpx.Limits(max_connections=24),
     ) as http_client:
         client = PublicSourceClient(http_client)
         tasks = [
@@ -702,6 +788,9 @@ async def collect(archive_page=9, tracked=None):
             *ghana_sources.tasks(client, archive_page),
             *employer_sources.tasks(client),
             *academic_sources.tasks(client),
+            *funding_sources.tasks(client),
+            *early_career_sources.tasks(client),
+            marriott_source.collect(client),
             jobweb_source.collect(client),
         ]
         names = [
@@ -712,6 +801,9 @@ async def collect(archive_page=9, tracked=None):
             *ghana_sources.SOURCE_NAMES,
             *employer_sources.SOURCE_NAMES,
             *academic_sources.SOURCE_NAMES,
+            *funding_sources.SOURCE_NAMES,
+            *early_career_sources.SOURCE_NAMES,
+            *marriott_source.SOURCE_NAMES,
             *jobweb_source.SOURCE_NAMES,
         ]
         result = await asyncio.gather(
@@ -785,7 +877,9 @@ async def refresh():
         if jobs is None:
             summary.append({"source": source, "state": "unavailable", "accepted": 0})
             continue
-        successful.add(source)
+        failed_checks = getattr(jobs, "failed_checks", 0)
+        if not failed_checks:
+            successful.add(source)
         for job in jobs:
             ids.add(job["id"])
             records.append(
@@ -798,7 +892,14 @@ async def refresh():
                     "deadline": job.get("deadline"),
                 }
             )
-        summary.append({"source": source, "state": "ok", "accepted": len(jobs)})
+        summary.append(
+            {
+                "source": source,
+                "state": "partial" if failed_checks else "ok",
+                "accepted": len(jobs),
+                "failed_checks": failed_checks,
+            }
+        )
     if records:
         merged = {j["id"]: j for j in deduplicate([r["payload"] for r in records])}
         for record in records:
@@ -816,6 +917,7 @@ async def refresh():
         in successful
         - ghana_sources.WINDOWED_SOURCES
         - academic_sources.WINDOWED_SOURCES
+        - early_career_sources.WINDOWED_SOURCES
         - {"jobweb-ghana"}
         and r["id"] not in ids
     ]
@@ -885,6 +987,9 @@ def catalogue_sources():
     registry = dict(ghana_sources.SOURCE_INFO)
     registry.update(employer_sources.SOURCE_INFO)
     registry.update(academic_sources.SOURCE_INFO)
+    registry.update(funding_sources.SOURCE_INFO)
+    registry.update(early_career_sources.SOURCE_INFO)
+    registry.update(marriott_source.SOURCE_INFO)
     registry.update(jobweb_source.SOURCE_INFO)
     for board in SMART:
         registry["smart:" + board] = (
@@ -934,6 +1039,7 @@ def catalogue_sources():
                     else "awaiting_refresh"
                 ),
                 "accepted": status.get("accepted", 0) if current else 0,
+                "failed_checks": status.get("failed_checks", 0) if current else 0,
             }
         )
     external = [
@@ -1126,6 +1232,11 @@ async def catalogue_details(job_id: str, verify: bool = False):
             "rid.ug.edu.gh",
             "ogr.knust.edu.gh",
             "jobwebghana.com",
+            "careers.votex365.com",
+            "www.ug.edu.gh",
+            "nya.gov.gh",
+            "careers.marriott.com",
+            *funding_sources.CHECK_HOSTS,
         ]
     ):
         try:
@@ -1133,6 +1244,84 @@ async def catalogue_details(job_id: str, verify: bool = False):
                 timeout=10, follow_redirects=True, headers=HEADERS
             ) as client:
                 r = await client.get(check)
+                if j.get("source_key") == "marriott-ghana" and r.status_code == 200:
+                    fresh = await marriott_source.recheck(client, j, r)
+                    if fresh is None:
+                        supabase.table("job_catalogue").update({"status": "closed"}).eq(
+                            "id", job_id
+                        ).execute()
+                        raise HTTPException(
+                            410,
+                            "The employer no longer lists this Ghana opportunity as open.",
+                        )
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
+                if (
+                    j.get("source_key") in funding_sources.SOURCE_NAMES
+                    and r.status_code == 200
+                ):
+                    fresh = funding_sources.recheck(j, r)
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
+                if (
+                    j.get("source_key") in early_career_sources.SOURCE_NAMES
+                    and r.status_code == 200
+                ):
+                    fresh = await early_career_sources.recheck(client, j)
+                    if fresh is None:
+                        supabase.table("job_catalogue").update({"status": "closed"}).eq(
+                            "id", job_id
+                        ).execute()
+                        raise HTTPException(
+                            410,
+                            "The source no longer confirms a current Ghana application window for this opportunity.",
+                        )
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
+                if host == "boards-api.greenhouse.io" and r.status_code == 200:
+                    endpoint = re.fullmatch(
+                        r"/v1/boards/([a-z0-9]+)/jobs/(\d+)", urlparse(check).path
+                    )
+                    if (
+                        not endpoint
+                        or endpoint[1] not in GREENHOUSE
+                        or j.get("source_key") != "greenhouse:" + endpoint[1]
+                    ):
+                        raise ValueError("Employer verification endpoint changed")
+                    data = r.json()
+                    if not isinstance(data, dict) or str(data.get("id")) != endpoint[2]:
+                        raise ValueError("Employer vacancy identity changed")
+                    fresh = parse_greenhouse(data, endpoint[1])
+                    if fresh is None:
+                        supabase.table("job_catalogue").update({"status": "closed"}).eq(
+                            "id", job_id
+                        ).execute()
+                        raise HTTPException(
+                            410,
+                            "The employer no longer confirms this role as open to Ghana applicants.",
+                        )
+                    j.update(
+                        {
+                            k: v
+                            for k, v in fresh.items()
+                            if k not in ["id", "first_seen_at"]
+                        }
+                    )
                 if host in ["api.ashbyhq.com", "gh.fido.money", "erp.mpharma.com"]:
                     if r.status_code != 200:
                         raise HTTPException(

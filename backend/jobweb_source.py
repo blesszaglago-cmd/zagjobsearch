@@ -13,7 +13,15 @@ import httpx
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET
 
-from ghana_sources import factual_summary, ghana_location, on_host, page
+from ghana_sources import (
+    factual_summary,
+    ghana_location,
+    on_host,
+    page,
+    CheckedListings,
+    checked_batch,
+    removed,
+)
 
 BASE = "https://jobwebghana.com"
 SOURCE_NAMES = ["jobweb-ghana"]
@@ -114,7 +122,7 @@ def feed_jobs(response):
         or len(response.content) > 2_000_000
     ):
         raise ValueError("Job board feed redirected or exceeded its bound")
-    root = ET.fromstring(response.content)
+    root = ET.fromstring(response.content, forbid_dtd=True)
     if root.tag != "rss" or root.find("channel") is None:
         raise ValueError("Job board feed format changed")
     out = {}
@@ -131,24 +139,40 @@ def feed_jobs(response):
 
 
 async def collect(client):
+    started = asyncio.get_running_loop().time()
     response = await client.get(BASE + "/feed/")
     response.raise_for_status()
     jobs = feed_jobs(response)
-    indexes = await asyncio.gather(
-        *(
+    indexes = await checked_batch(
+        (
             page(client, u)
             for u in [
                 BASE + "/jobs/",
                 BASE + "/job-type/internship/",
-                *[BASE + f"/jobs/page/{n}/" for n in range(2, 7)],
+                BASE + "/job-type/part-time/",
+                BASE + "/job-type/temporary/",
+                BASE + "/job-type/freelance/",
+                *[BASE + f"/jobs/page/{n}/" for n in range(2, 13)],
             ]
-        )
+        ),
+        timeout=35,
     )
     links = set()
+    failures, valid_indexes = 0, 0
     for soup in indexes:
+        if isinstance(soup, httpx.HTTPStatusError) and soup.response.status_code in (
+            404,
+            410,
+        ):
+            continue  # An optional category or page beyond the end is empty.
+        if isinstance(soup, Exception):
+            failures += 1
+            continue
         lists = soup.select("ol.jobs")
         if not lists:
-            raise ValueError("Job board vacancy index changed")
+            failures += 1
+            continue
+        valid_indexes += 1
         for listing in lists:
             for a in listing.select("a[href]"):
                 parsed = urlparse(urljoin(BASE, a["href"]))
@@ -156,12 +180,13 @@ async def collect(client):
                     r"/jobs/[a-z0-9-]+/", parsed.path
                 ):
                     links.add(vacancy_url(parsed.geturl()))
-    if not links or len(links) > 100:
+    if not valid_indexes or not links or len(links) > 220:
         raise ValueError("Job board discovery window changed")
     # Details establish the current application window and explicit job type.
     pending = sorted(links | jobs.keys(), key=lambda u: (len(u), u))
-    details = await asyncio.gather(
-        *(page(client, u) for u in pending), return_exceptions=True
+    details = await checked_batch(
+        (page(client, u) for u in pending),
+        timeout=max(1, 100 - (asyncio.get_running_loop().time() - started)),
     )
     signatures = {}
     for url, soup in zip(pending, details):
@@ -172,8 +197,16 @@ async def collect(client):
             jobs.pop(url, None)
             continue
         if isinstance(soup, Exception):
-            raise ValueError("Job board source check incomplete")
-        if job := parse_detail(soup, url):
+            failures += 1
+            jobs.pop(url, None)  # Never use feed-only data after a failed detail check.
+            continue
+        try:
+            job = parse_detail(soup, url)
+        except (ValueError, KeyError, TypeError):
+            failures += 1
+            jobs.pop(url, None)
+            continue
+        if job:
             body = soup.select_one(".section.single .section_content > font")
             fingerprint = hashlib.sha256(
                 re.sub(r"\s+", " ", body.get_text(" ", strip=True)).encode()
@@ -195,4 +228,4 @@ async def collect(client):
             jobs[url] = job
         else:
             jobs.pop(url, None)
-    return "jobweb-ghana", list(jobs.values())
+    return "jobweb-ghana", CheckedListings(jobs.values(), failed_checks=failures)

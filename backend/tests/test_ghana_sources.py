@@ -210,10 +210,13 @@ class PartialSourceTests(unittest.IsolatedAsyncioTestCase):
             return await g.current_jobs(object())
 
     async def test_one_malformed_detail_is_not_reported_as_a_healthy_source(self):
-        with self.assertRaises(ValueError):
-            await self.collect()
+        source, jobs = await self.collect()
+        self.assertEqual(source, "ghana-current-jobs")
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs.failed_checks, 1)
 
     async def test_removed_detail_does_not_discard_other_current_jobs(self):
         source, jobs = await self.collect(removed=True)
         self.assertEqual(source, "ghana-current-jobs")
         self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs.failed_checks, 0)
