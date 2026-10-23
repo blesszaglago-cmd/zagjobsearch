@@ -174,3 +174,25 @@ test("closed and temporarily unavailable Apply responses cannot be cached", asyn
     assert.equal(response.headers.get("cache-control"), "no-store");
   }
 });
+
+test("browser Apply failures lead to a friendly page while JSON clients keep their status", async () => {
+  for (const status of [404, 503]) {
+    const route = loadRoute("../app/api/jobs/[id]/apply/route.ts", async () => Response.json({ detail: "Unavailable" }, { status }));
+    const request = new Request("https://site.example/api/jobs/test/apply", { headers: { accept: "text/html,application/xhtml+xml" } });
+    const response = await route.GET(request, { params: Promise.resolve({ id: "test" }) });
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), `https://site.example/application-unavailable?reason=${status === 404 ? "closed" : "temporary"}`);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
+    assert.equal(response.headers.get("vary"), "Accept");
+  }
+});
+
+test("browser Apply still redirects directly to a confirmed external posting", async () => {
+  const route = loadRoute("../app/api/jobs/[id]/apply/route.ts", async () => Response.json({ id: "test", can_apply: true, url: "https://employer.example/jobs/123" }));
+  const request = new Request("https://site.example/api/jobs/test/apply", { headers: { accept: "text/html" } });
+  const response = await route.GET(request, { params: Promise.resolve({ id: "test" }) });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "https://employer.example/jobs/123");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
