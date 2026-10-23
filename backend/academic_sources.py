@@ -155,15 +155,16 @@ def make_academic(
     rolling=False,
     deadline_note="",
     study_location=None,
+    source_info=None,
 ):
     from catalogue import NOW, scholarship_state
 
     job = {
         "id": hashlib.sha256((source + ":" + url).encode()).hexdigest()[:32],
         "source_key": source,
-        "source": SOURCE_INFO[source][0],
+        "source": (source_info or SOURCE_INFO)[source][0],
         "title": title,
-        "company": SOURCE_INFO[source][0],
+        "company": (source_info or SOURCE_INFO)[source][0],
         "location": study_location
         or {
             "ghana": "Study / research in Ghana",

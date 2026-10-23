@@ -19,8 +19,9 @@ export default async function CoverageOverview() {
         funding notices
       </p>
       <p>
-        Counts change as sources publish and close opportunities. A region
-        filter may have no current matches.
+        Counts change as sources publish and close opportunities. Region totals
+        include jobs, early careers and remote roles with a mapped location,
+        including nationwide programmes.
       </p>
       <div className="coverage-list">
         {Object.entries(c.regions).map(([name, count]) => (

@@ -131,6 +131,8 @@ def add_application(data: Application, user=Depends(current_user)):
             .select("*")
             .eq("user_id", user)
             .eq("source_url", data.source_url)
+            .eq("job_title", data.job_title)
+            .eq("company_name", data.company_name)
             .is_("deleted_at", "null")
             .limit(1)
             .execute()

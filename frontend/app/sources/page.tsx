@@ -20,6 +20,7 @@ type Source = {
   note: string;
   state?: string;
   accepted?: number;
+  failed_checks?: number;
 };
 type Coverage = {
   updated_at: string | null;
@@ -104,9 +105,11 @@ export default async function Sources() {
                     >
                       {source.state === "ok"
                         ? "Checked"
-                        : source.state === "unavailable"
-                          ? "Check unavailable"
-                          : "Awaiting check"}
+                        : source.state === "partial"
+                          ? "Partially checked"
+                          : source.state === "unavailable"
+                            ? "Check unavailable"
+                            : "Awaiting check"}
                     </span>
                   </div>
                   <h3>
@@ -122,7 +125,9 @@ export default async function Sources() {
                   <div className="source-card-bottom">
                     {source.state === "ok"
                       ? `${source.accepted ?? 0} eligible records at last check`
-                      : "Only recently confirmed records appear in search"}
+                      : source.state === "partial"
+                        ? `${source.accepted ?? 0} confirmed records · ${source.failed_checks ?? 0} checks need a retry`
+                        : "Only recently confirmed records appear in search"}
                   </div>
                 </article>
               ))}

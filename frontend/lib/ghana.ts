@@ -43,6 +43,8 @@ export const types: Record<string, string[][]> = {
     ["part-time", "Part-time"],
     ["contract", "Contracts"],
     ["internship", "Internships"],
+    ["graduate", "Graduate roles"],
+    ["apprenticeship", "Apprenticeships"],
   ],
 };
 export const experienceLevels = [
@@ -73,6 +75,13 @@ export const scholarshipSources = [
   ["daad-ghana", "DAAD Ghana funding database"],
   ["ug-research", "University of Ghana research calls"],
   ["knust-research", "KNUST research calls"],
+  ["lincoln-global-leaders", "University of Lincoln"],
+  ["harvard-loeb", "Harvard Loeb Fellowship"],
+  ["bodleian-visiting", "Oxford Bodleian Libraries"],
+  ["columbia-italian-academy", "Columbia Italian Academy"],
+  ["unesco-research-continuity", "UNESCO research grants"],
+  ["ucl-hp-ai-education", "UCL funded leadership training"],
+  ["lse-demography-funding", "LSE research studentships"],
 ];
 export function displayDate(value?: string | number | null) {
   if (!value) return "Not provided";

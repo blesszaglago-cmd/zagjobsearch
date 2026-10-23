@@ -175,6 +175,10 @@ def identity(job):
     name = {"newmontghana": "newmont", "newmontminingcorporation": "newmont"}.get(
         name, name
     )
+    name = {
+        "marriott": "marriottinternational",
+        "accramarriotthotel": "marriottinternational",
+    }.get(name, name)
     place = re.sub(r"\bghana\b", "", job["location"], flags=re.I)
     return (
         name,
