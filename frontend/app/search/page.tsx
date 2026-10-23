@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import SearchContent from "@/components/SearchContent";
-import { getSearchResult } from "@/lib/jobs-server";
+import { CatalogueRequestError, getSearchResult } from "@/lib/jobs-server";
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -47,13 +47,15 @@ export default async function Page({ searchParams }: Props) {
   let data;
   try {
     data = await getSearchResult(query);
-  } catch {
+  } catch (error) {
     data = {
       jobs: [],
       total: 0,
       has_more: false,
       error:
-        "The catalogue is temporarily unavailable. Please try again shortly.",
+        error instanceof CatalogueRequestError
+          ? error.message
+          : "The catalogue is temporarily unavailable. Please try again shortly.",
     };
   }
   return <SearchContent key={query} initialFilter={query} initialData={data} />;

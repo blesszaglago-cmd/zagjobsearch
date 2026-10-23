@@ -50,7 +50,7 @@ class WorkspaceTests(unittest.IsolatedAsyncioTestCase):
 
     def test_cross_account_access(self):
         db = MagicMock()
-        db.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = (
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.is_.return_value.execute.return_value.data = (
             []
         )
         db.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value.data = (

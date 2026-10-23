@@ -4,6 +4,7 @@ import re
 from datetime import date, timedelta, datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 from database.supabase_client import supabase
@@ -24,8 +25,8 @@ class Application(BaseModel):
         "started", "applied", "interview", "offer", "rejected", "ghosted"
     ] = "started"
     notes: str = Field(default="", max_length=10000)
-    salary_min: float | None = Field(default=None, ge=0)
-    salary_max: float | None = Field(default=None, ge=0)
+    salary_min: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    salary_max: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     salary_currency: str = Field(default="", max_length=10)
     salary_period: str = Field(default="", max_length=30)
     contact_person: str = Field(default="", max_length=250)
@@ -33,6 +34,22 @@ class Application(BaseModel):
     reminder_date: date | None = None
     email_reminder: bool = False
     reminder_auto: bool = True
+
+    @field_validator(
+        "job_title",
+        "company_name",
+        "company_website",
+        "location",
+        "source_url",
+        "source",
+        "salary_currency",
+        "salary_period",
+        "contact_person",
+        mode="before",
+    )
+    @classmethod
+    def trim_fields(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def valid_salary(self):
@@ -131,13 +148,15 @@ def add_application(data: Application, user=Depends(current_user)):
 
 @router.put("/account/applications/{application_id}")
 def update_application(
-    application_id: str, data: Application, user=Depends(current_user)
+    application_id: UUID, data: Application, user=Depends(current_user)
 ):
+    application_id = str(application_id)
     existing = (
         supabase.table("applications")
         .select("reminder_date,email_reminder")
         .eq("id", application_id)
         .eq("user_id", user)
+        .is_("deleted_at", "null")
         .execute()
         .data
     )
@@ -168,6 +187,7 @@ def update_application(
         .update(payload)
         .eq("id", application_id)
         .eq("user_id", user)
+        .is_("deleted_at", "null")
         .execute()
     )
     if not result.data:
@@ -176,7 +196,8 @@ def update_application(
 
 
 @router.delete("/account/applications/{application_id}")
-def delete_application(application_id: str, user=Depends(current_user)):
+def delete_application(application_id: UUID, user=Depends(current_user)):
+    application_id = str(application_id)
     result = (
         supabase.table("applications")
         .update({"deleted_at": datetime.now(timezone.utc).isoformat()})
@@ -190,7 +211,8 @@ def delete_application(application_id: str, user=Depends(current_user)):
 
 
 @router.post("/account/applications/{application_id}/restore")
-def restore_application(application_id: str, user=Depends(current_user)):
+def restore_application(application_id: UUID, user=Depends(current_user)):
+    application_id = str(application_id)
     result = (
         supabase.table("applications")
         .update({"deleted_at": None})
@@ -204,12 +226,14 @@ def restore_application(application_id: str, user=Depends(current_user)):
 
 
 @router.get("/account/applications/{application_id}/events")
-def events(application_id: str, user=Depends(current_user)):
+def events(application_id: UUID, user=Depends(current_user)):
+    application_id = str(application_id)
     owns = (
         supabase.table("applications")
         .select("id")
         .eq("id", application_id)
         .eq("user_id", user)
+        .is_("deleted_at", "null")
         .execute()
     )
     if not owns.data:

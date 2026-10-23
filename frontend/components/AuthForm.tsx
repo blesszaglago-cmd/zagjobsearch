@@ -121,12 +121,11 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         <h1>{titles[mode]}</h1>
         {(mode === "login" || mode === "signup") &&
           capabilities.google_enabled && (
-            <button
-              className="btn-outline google-login"
-              onClick={() => window.location.assign("/api/account/google")}
-            >
-              Continue with Google
-            </button>
+            <form action="/api/account/google" method="get">
+              <button type="submit" className="btn-outline google-login">
+                Continue with Google
+              </button>
+            </form>
           )}
         {mode === "recovery" && capabilities.email_enabled === false ? (
           <p>
@@ -178,7 +177,9 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                   required
                   minLength={mode === "login" ? 1 : 8}
                   maxLength={128}
-                  aria-describedby={mode === "login" ? undefined : "password-hint"}
+                  aria-describedby={
+                    mode === "login" ? undefined : "password-hint"
+                  }
                   value={form.password}
                   onChange={(e) =>
                     setForm({ ...form, password: e.target.value })

@@ -21,6 +21,7 @@ type SearchData = {
   jobs: Job[];
   total: number;
   has_more: boolean;
+  page?: number;
   updated_at?: string;
   source_status?: { state: string }[];
   error?: string;
@@ -45,7 +46,7 @@ export default function SearchContent({
     updated = initialData.updated_at,
     error = initialData.error || "",
     warning = initialData.source_status?.some((s) => s.state !== "ok");
-  const page = Math.max(1, Number(params.get("page")) || 1);
+  const page = initialData.page ?? Math.max(1, Number(params.get("page")) || 1);
   function sameQuery(next: URLSearchParams) {
     const a = new URLSearchParams(next),
       b = new URLSearchParams(filterString);
@@ -324,6 +325,7 @@ export default function SearchContent({
                   <option value="month">Monthly</option>
                   <option value="year">Annual</option>
                   <option value="hour">Hourly</option>
+                  <option value="day">Daily</option>
                   <option value="week">Weekly</option>
                 </select>
                 <p className="filter-note">

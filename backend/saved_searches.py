@@ -5,7 +5,8 @@ import hashlib
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from uuid import UUID
 from database.supabase_client import supabase
 from sessions import current_user
 from mailer import email_enabled, enqueue
@@ -36,6 +37,11 @@ class SavedSearch(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     filters: dict[str, str]
     email_alert: bool = False
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def clean_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 @router.get("/account/saved-searches")
@@ -101,11 +107,11 @@ def save_search(data: SavedSearch, user=Depends(current_user)):
 
 
 @router.delete("/account/saved-searches/{search_id}")
-def delete_search(search_id: str, user=Depends(current_user)):
+def delete_search(search_id: UUID, user=Depends(current_user)):
     rows = (
         supabase.table("saved_searches")
         .delete()
-        .eq("id", search_id)
+        .eq("id", str(search_id))
         .eq("user_id", user)
         .execute()
         .data

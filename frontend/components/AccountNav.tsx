@@ -6,6 +6,8 @@ import Link from "next/link";
 export default function AccountNav() {
   const router = useRouter();
   const [signedIn, setSignedIn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
   useEffect(() => {
     const c = new AbortController();
     fetch("/api/account/session", { cache: "no-store", signal: c.signal })
@@ -25,20 +27,31 @@ export default function AccountNav() {
           <Link href="/settings">Settings</Link>
           <button
             className="btn-outline"
+            disabled={busy}
             onClick={async () => {
-              const response = await fetch("/api/account/logout", {
-                method: "POST",
-              });
-              if (!response.ok) {
-                alert("Sign out could not be confirmed. Please try again.");
-                return;
+              setBusy(true);
+              setMessage("");
+              try {
+                const response = await fetch("/api/account/logout", {
+                  method: "POST",
+                });
+                if (!response.ok)
+                  throw Error(
+                    "Sign out could not be confirmed. Please try again.",
+                  );
+                setSignedIn(false);
+                router.push("/");
+                router.refresh();
+              } catch {
+                setMessage(
+                  "Sign out could not be confirmed. Please try again.",
+                );
+              } finally {
+                setBusy(false);
               }
-              setSignedIn(false);
-              router.push("/");
-              router.refresh();
             }}
           >
-            Sign out
+            {busy ? "Signing out…" : "Sign out"}
           </button>
         </>
       ) : (
@@ -49,6 +62,7 @@ export default function AccountNav() {
           </Link>
         </>
       )}
+      {message && <span role="alert">{message}</span>}
     </div>
   );
 }

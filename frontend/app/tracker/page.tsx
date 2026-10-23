@@ -2,6 +2,7 @@
 import Icon from "@/components/Icon";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import {
@@ -19,6 +20,7 @@ type Event = {
   created_at: string;
 };
 export default function Tracker() {
+  const router = useRouter();
   const selection = useRef(0);
   const editorRef = useRef<HTMLElement>(null);
   const [editorRequest, setEditorRequest] = useState(0);
@@ -38,8 +40,10 @@ export default function Tracker() {
       .then((p) => {
         if (active) {
           setSignedIn(true);
-          if (!p.onboarding_complete)
-            window.location.assign("/settings?setup=1");
+          if (!p.onboarding_complete) {
+            router.replace("/settings?setup=1");
+            return { applications: [] };
+          }
           fetch("/api/account/config")
             .then((r) => r.json())
             .then((c) => {
@@ -62,7 +66,7 @@ export default function Tracker() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
   useEffect(() => {
     if (!editorRequest || loading || !signedIn) return;
     const editor = editorRef.current;
@@ -287,7 +291,9 @@ export default function Tracker() {
                         : "No reminder set"}
                     </small>
                   </span>
-                  <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
+                  <span aria-hidden="true">
+                    <Icon name="arrow-up-right" />
+                  </span>
                 </button>
               ))}
               {filtered.length === 0 && (
