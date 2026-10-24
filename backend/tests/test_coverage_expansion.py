@@ -167,6 +167,49 @@ class CoverageTests(unittest.IsolatedAsyncioTestCase):
             "2026-11-27T17:00:00+00:00",
         )
 
+    def test_columbia_uses_the_exact_new_york_application_clock(self):
+        body = soup(
+            "Candidates of any nationality are invited to apply. Each application includes a copy of the PhD degree. Fellows receive a full-time salary. "
+            "DEADLINE: Friday, December 4, 2026. "
+            "The application deadline is Friday, December 4, 2026 (11:59 pm, New York time). "
+            "The deadline for recommendation letters is December 14."
+        )
+        job = funds.parse_call(body, "columbia-italian-academy")
+        self.assertEqual(job["deadline"], "2026-12-05T04:59:00+00:00")
+        self.assertIn("11:59 pm New York time", job["deadline_note"])
+        self.assertNotIn("without an exact time", job["deadline_note"])
+
+    def test_columbia_clock_uses_daylight_saving_for_the_provider_date(self):
+        self.assertEqual(
+            funds.deadline_text(
+                "columbia-italian-academy",
+                "DEADLINE: June 4, 2027. The application deadline is June 4, 2027 (11:59 pm, New York time).",
+            ),
+            ["June 4, 2027 11:59 pm New York time"],
+        )
+        body = soup(
+            "Candidates of any nationality are invited to apply. Each application includes a copy of the PhD degree. Fellows receive a full-time salary. "
+            "DEADLINE: June 4, 2027. The application deadline is June 4, 2027 (11:59 pm, New York time)."
+        )
+        self.assertEqual(
+            funds.parse_call(body, "columbia-italian-academy")["deadline"],
+            "2027-06-05T03:59:00+00:00",
+        )
+
+    def test_columbia_date_only_notice_does_not_invent_an_exact_clock(self):
+        body = soup(
+            "Candidates of any nationality are invited to apply. Each application includes a copy of the PhD degree. Fellows receive a full-time salary. DEADLINE: December 4, 2026."
+        )
+        job = funds.parse_call(body, "columbia-italian-academy")
+        self.assertIn("without an exact time", job["deadline_note"])
+
+    def test_columbia_conflicting_provider_dates_fail_closed(self):
+        with self.assertRaisesRegex(ValueError, "deadlines conflict"):
+            funds.deadline_text(
+                "columbia-italian-academy",
+                "DEADLINE: December 4, 2026. The application deadline is December 5, 2026 (11:59 pm, New York time).",
+            )
+
     def test_unesco_prior_master_qualification_is_not_a_masters_scholarship(self):
         body = soup(
             "Applications are now open for the SCRS Research Continuity Grants. African nationals based at a recognized university can apply. Applications are welcome from all African countries. Research must have been interrupted by an armed conflict or natural or biological hazard. Applicants need a master's degree. Application deadline: 15 November 2026, 23:59 Paris time."

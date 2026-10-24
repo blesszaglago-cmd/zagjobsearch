@@ -18,6 +18,8 @@ Cleanup runs daily at 03:30 UTC: expired rate/token records, email queue records
 
 ## Live checks and failure handling
 
+Local source investigations use [the extracted REA workflow](source-investigation.md): offline request grouping, public JavaScript endpoint candidates and before/after comparison. It adds no production analysis engine or paid service. After a new refresh, source status also includes an optional safe failure category (`http` and numeric status, `timeout`, `connection`, `validation`, or `reader`); old summaries stay null until refreshed. This supports targeted diagnosis without disclosing exception messages or provider bodies.
+
 `python scripts/healthcheck.py` checks backend availability, a catalogue refresh completed within 24 hours, current Ghana jobs, server-rendered job content, the sitemap, robots.txt and unauthenticated Apply denial on both API layers. Stale/failed refreshes, no successfully checked source records or a broken public flow fail the run. Individual partial/unavailable publishers produce warnings and an explicit `catalogue_status: degraded`; they never skip the remaining availability checks. The GitHub job summary lists each source's state, accepted records and failed checks, and the public Sources page keeps the same source warnings. This distinction does not repair or hide external source failures.
 
 `.github/workflows/health.yml` runs every six hours, when the monitor changes on main, and on manual dispatch. A monitor fix therefore gets a fresh run without re-running historical code. GitHub displays real failed runs; enable repository workflow-failure notifications in your own account if you want email alerts. GitHub schedules can be delayed and are not an uptime SLA.
