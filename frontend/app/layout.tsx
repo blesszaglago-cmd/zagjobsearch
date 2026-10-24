@@ -3,8 +3,9 @@ import { siteUrl } from "@/lib/site";
 import "./globals.css";
 import "./scholsec-theme.css";
 import "./repairs.css";
+import "./cookies.css";
 import localFont from "next/font/local";
-import AnalyticsConsent from "@/components/AnalyticsConsent";
+import CookieConsent from "@/components/CookieConsent";
 const lato = localFont({
   src: [
     { path: "../public/fonts/lato-400.woff2", weight: "400" },
@@ -78,7 +79,7 @@ export default function RootLayout({
           Skip to content
         </a>
         {children}
-        <AnalyticsConsent />
+        <CookieConsent />
       </body>
     </html>
   );
