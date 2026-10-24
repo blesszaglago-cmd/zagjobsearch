@@ -18,7 +18,9 @@ Cleanup runs daily at 03:30 UTC: expired rate/token records, email queue records
 
 ## Live checks and failure handling
 
-`python scripts/healthcheck.py` checks fresh catalogue data, server-rendered job content, the sitemap and robots.txt. `.github/workflows/health.yml` runs it every six hours and can be run manually. GitHub displays failed runs; enable repository workflow-failure notifications in your own account if you want email alerts. GitHub schedules can be delayed and are not an uptime SLA.
+`python scripts/healthcheck.py` checks backend availability, a catalogue refresh completed within 24 hours, current Ghana jobs, server-rendered job content, the sitemap, robots.txt and unauthenticated Apply denial on both API layers. Stale/failed refreshes, no successfully checked source records or a broken public flow fail the run. Individual partial/unavailable publishers produce warnings and an explicit `catalogue_status: degraded`; they never skip the remaining availability checks. The GitHub job summary lists each source's state, accepted records and failed checks, and the public Sources page keeps the same source warnings. This distinction does not repair or hide external source failures.
+
+`.github/workflows/health.yml` runs every six hours, when the monitor changes on main, and on manual dispatch. A monitor fix therefore gets a fresh run without re-running historical code. GitHub displays real failed runs; enable repository workflow-failure notifications in your own account if you want email alerts. GitHub schedules can be delayed and are not an uptime SLA.
 
 The public Sources page distinguishes successful, unavailable and external-only sources. Unknown salary, experience or deadline values stay unknown. An empty region or programme tab is valid when no eligible source records exist. Job boards may reject automated use or change their page formats. LinkedIn/Jobberman and other external-only destinations do not become importer APIs simply because they have public web pages.
 
