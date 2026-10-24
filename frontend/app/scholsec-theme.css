@@ -1181,9 +1181,6 @@ summary:focus-visible {
   font-weight: 700;
   background: var(--portal-green);
 }
-.analytics-settings {
-  background: #fff;
-}
 @media (min-width: 1450px) {
   .portal-hero,
   .portal-hero-inner {

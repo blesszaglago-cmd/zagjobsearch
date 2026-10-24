@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: October 17, 2026
+Last updated: October 24, 2026
 
 jobs.ac.ghana is an independent Ghana opportunity search and application tracker operated by Bless Mawumenyo Zaglago at zagjobsearch.vercel.app. It is not a government service.
 
@@ -26,7 +26,7 @@ Vercel hosts the website and API. Supabase stores application data and supports 
 
 ## Optional analytics
 
-Analytics loads only after Allow analytics. Public page views exclude search parameters and URL fragments. With that same consent, fixed events measure sign-ups, logins, Apply clicks, saved applications, saved searches and sharing. We do not send names, emails, CV text, application notes, application contents or private-page URLs. Advertising features are disabled. Device, browser, approximate location, referring website origin and a limited campaign-source label may be processed. Change your choice through Analytics settings at the bottom of any page. Google's privacy policy is https://policies.google.com/privacy.
+Google Analytics loads only after you accept optional analytics through the cookie controls. Public page views exclude search parameters and URL fragments. With that same consent, fixed events measure sign-ups, logins, Apply clicks, saved applications, saved searches and sharing. We do not send names, emails, CV text, application notes, application contents or private-page URLs. Advertising features are disabled. Device, browser, approximate location, referring website origin and a limited campaign-source label may be processed. Your cookie choice lasts up to 180 days on this browser. Change it through Cookie settings at the bottom of any page. Withdrawing permission disables analytics and clears its cookies without signing you out. Google's privacy policy is https://policies.google.com/privacy.
 
 ## Your controls
 

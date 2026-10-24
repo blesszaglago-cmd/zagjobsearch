@@ -34,7 +34,7 @@ export default function Footer() {
             <Link href="/signup">Create an account</Link>
             <Link href="/privacy">Privacy policy</Link>
             <Link href="/terms">Terms of use</Link>
-            <Link href="/cookies">Cookie choices</Link>
+            <Link href="/cookies">Cookie policy</Link>
           </nav>
         </div>
       </div>

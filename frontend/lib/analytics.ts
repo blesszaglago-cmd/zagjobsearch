@@ -1,19 +1,45 @@
 "use client";
+import { readCookieChoice } from "./cookie-consent";
+
 export const measurementId = "G-3N6T2M5ED8";
 type AnalyticsWindow = Window & {
   dataLayer?: unknown[];
   gtag?: (...args: unknown[]) => void;
+  "ga-disable-G-3N6T2M5ED8"?: boolean;
 };
 export function analyticsAllowed() {
+  return readCookieChoice() === "granted";
+}
+
+export function disableAnalytics() {
+  const analytics = window as AnalyticsWindow;
+  analytics[`ga-disable-${measurementId}`] = true;
+  // Only remove this site's analytics cookies; never touch sign-in cookies.
   try {
-    return localStorage.getItem("zag_analytics_consent_v1") === "granted";
+    for (const cookie of document.cookie.split(";")) {
+      const name = cookie.trim().split("=")[0];
+      if (name !== "_ga" && !/^_ga_[A-Za-z0-9_]+$/.test(name)) continue;
+      for (const domain of [
+        "",
+        `; Domain=${location.hostname}`,
+        `; Domain=.${location.hostname}`,
+      ]) {
+        document.cookie = `${name}=; Max-Age=0; Path=/${domain}; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
+      }
+    }
   } catch {
-    return false;
+    // Some privacy settings block cookie access. Collection remains disabled.
   }
 }
+
 export function initialiseAnalytics() {
-  if (!analyticsAllowed()) return;
+  if (!analyticsAllowed()) {
+    disableAnalytics();
+    return;
+  }
   const analytics = window as AnalyticsWindow;
+  const wasDisabled = analytics[`ga-disable-${measurementId}`] === true;
+  analytics[`ga-disable-${measurementId}`] = false;
   if (!analytics.gtag) {
     analytics.dataLayer = analytics.dataLayer || [];
     analytics.gtag = function () {
@@ -21,11 +47,12 @@ export function initialiseAnalytics() {
       analytics.dataLayer!.push(arguments);
     };
     analytics.gtag("consent", "default", {
-      analytics_storage: "granted",
+      analytics_storage: "denied",
       ad_storage: "denied",
       ad_user_data: "denied",
       ad_personalization: "denied",
     });
+    analytics.gtag("consent", "update", { analytics_storage: "granted" });
     analytics.gtag("js", new Date());
     analytics.gtag("config", measurementId, {
       send_page_view: false,
@@ -34,6 +61,8 @@ export function initialiseAnalytics() {
       cookie_domain: location.hostname,
       cookie_expires: 60 * 60 * 24 * 180,
       cookie_update: false,
+      cookie_flags:
+        location.protocol === "https:" ? "SameSite=Lax;Secure" : "SameSite=Lax",
       page_location: location.origin,
       page_referrer: "",
     });
@@ -42,6 +71,8 @@ export function initialiseAnalytics() {
     script.async = true;
     script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
     document.head.appendChild(script);
+  } else if (wasDisabled) {
+    analytics.gtag("consent", "update", { analytics_storage: "granted" });
   }
   return analytics;
 }
