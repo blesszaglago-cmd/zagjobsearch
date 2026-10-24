@@ -1,0 +1,20 @@
+{
+  "project": "REA",
+  "version": "6.7.0",
+  "repository": "https://github.com/morluto/rea",
+  "transformation": "TypeScript types removed using the existing frontend TypeScript compiler; runtime code unchanged.",
+  "modules": [
+    {
+      "file": "recorded-transport-url.mjs",
+      "source": "src/domain/recordedTransportUrl.ts",
+      "selection": "complete module",
+      "sha256": "97ad214adcd1138d83217073a27a17134c36ddf2a57e0d573da32d9e12e4c6c4"
+    },
+    {
+      "file": "route-rule.mjs",
+      "source": "src/domain/analysisView/webNetworkRouteTemplates.ts",
+      "selection": "segmentRule",
+      "sha256": "dd7c0eb19f2eb4d7ca708b12f8aef21f1b30f633ba88944f6549226e645fc940"
+    }
+  ]
+}

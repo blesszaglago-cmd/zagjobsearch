@@ -21,3 +21,6 @@ data/
 Thumbs.db
 # Supabase CLI cache
 supabase/.temp/
+
+# Local source investigation inputs and reports
+local-source-evidence/

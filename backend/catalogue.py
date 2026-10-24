@@ -750,6 +750,25 @@ async def mining(client):
     return "anglogold", [x for x in out if x]
 
 
+def source_failure(error):
+    """Retain an actionable category, never provider bodies or exception text."""
+    if isinstance(error, httpx.HTTPStatusError):
+        return {"kind": "http", "status": error.response.status_code}
+    if isinstance(error, (TimeoutError, httpx.TimeoutException)):
+        return {"kind": "timeout"}
+    if isinstance(error, httpx.TransportError):
+        return {"kind": "connection"}
+    if isinstance(error, ValueError):
+        return {"kind": "validation"}
+    return {"kind": "reader"}
+
+
+class CollectedSources(list):
+    def __init__(self, rows=(), *, failures=None):
+        super().__init__(rows)
+        self.failures = failures or {}
+
+
 async def collect(archive_page=9, tracked=None):
     async with source_client(HEADERS) as http_client:
         client = PublicSourceClient(http_client)
@@ -789,10 +808,17 @@ async def collect(archive_page=9, tracked=None):
                     name,
                     type(outcome).__name__,
                 )
-        collected = [
-            (names[i], None if isinstance(r, Exception) else r[1])
-            for i, r in enumerate(result)
-        ]
+        collected = CollectedSources(
+            [
+                (names[i], None if isinstance(r, Exception) else r[1])
+                for i, r in enumerate(result)
+            ],
+            failures={
+                names[i]: source_failure(r)
+                for i, r in enumerate(result)
+                if isinstance(r, Exception)
+            },
+        )
         if tracked:
             present = {j["id"] for _, jobs in collected for j in (jobs or [])}
             try:
@@ -848,7 +874,14 @@ async def refresh():
     ids = set()
     for source, jobs in results:
         if jobs is None:
-            summary.append({"source": source, "state": "unavailable", "accepted": 0})
+            summary.append(
+                {
+                    "source": source,
+                    "state": "unavailable",
+                    "accepted": 0,
+                    "failure": getattr(results, "failures", {}).get(source),
+                }
+            )
             continue
         failed_checks = getattr(jobs, "failed_checks", 0)
         if not failed_checks:
@@ -1013,6 +1046,7 @@ def catalogue_sources():
                 ),
                 "accepted": status.get("accepted", 0) if current else 0,
                 "failed_checks": status.get("failed_checks", 0) if current else 0,
+                "failure": status.get("failure") if current else None,
             }
         )
     external = [

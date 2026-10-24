@@ -163,6 +163,22 @@ def clean_body(soup):
 
 
 def deadline_text(key, body):
+    if key == "columbia-italian-academy":
+        heading = re.search(
+            r"DEADLINE:\s*(?:[A-Za-z]+,\s*)?(" + DATE + r")", body, re.I
+        )
+        precise = re.search(
+            r"The application deadline is\s*(?:[A-Za-z]+,\s*)?("
+            + DATE
+            + r")\s*\(\s*(\d{1,2}:[0-5]\d\s*[ap]m),?\s*New York time\s*\)",
+            body,
+            re.I,
+        )
+        if precise:
+            if heading and academic_date(heading[1]) != academic_date(precise[1]):
+                raise ValueError("Provider application deadlines conflict")
+            return [f"{precise[1]} {precise[2]} New York time"]
+        return [heading[1]] if heading else []
     if key == "lincoln-global-leaders":
         return re.findall(
             r"For a programme of study commencing in [A-Za-z]+ \d{4}:\s*(?:[A-Za-z]+\s+)?("
@@ -178,7 +194,6 @@ def deadline_text(key, body):
         "bodleian-visiting": r"The deadline is\s+("
         + DATE
         + r",\s*\d{1,2}(?::\d{2})?\s*[ap]m\s*\(GMT\))",
-        "columbia-italian-academy": r"DEADLINE:\s*(?:[A-Za-z]+,\s*)?(" + DATE + r")",
         "unesco-research-continuity": r"Application deadline:\s*("
         + DATE
         + r",\s*\d{1,2}:\d{2}\s+Paris time)",
