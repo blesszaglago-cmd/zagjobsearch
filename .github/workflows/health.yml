@@ -1,5 +1,10 @@
 name: Live site health
 on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/healthcheck.py
+      - .github/workflows/health.yml
   schedule:
     - cron: "43 */6 * * *"
   workflow_dispatch:
@@ -13,4 +18,5 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - run: python3 scripts/healthcheck.py
+      - name: Check public availability, discovery and guest Apply protection
+        run: python3 scripts/healthcheck.py
