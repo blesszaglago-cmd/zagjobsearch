@@ -74,7 +74,7 @@ class RestoreDatabaseTests(unittest.TestCase):
             )
             migration = (
                 Path(__file__).resolve().parents[2]
-                / "supabase/migrations/20261025041956_source_progress_queue.sql"
+                / "supabase/migrations/20261025043319_source_progress_queue.sql"
             )
             connection.execute(migration.read_text())
             self.assertEqual(
