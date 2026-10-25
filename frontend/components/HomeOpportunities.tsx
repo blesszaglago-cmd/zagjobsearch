@@ -1,51 +1,15 @@
-"use client";
 import Icon from "@/components/Icon";
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import type { Job } from "@/lib/jobs";
+import { homeOpportunities } from "@/lib/home-opportunities";
 import { displayDate } from "@/lib/ghana";
-export default function HomeOpportunities() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  useEffect(() => {
-    const controller = new AbortController();
-    const read = async (category: string) => {
-      const response = await fetch(
-        `/api/jobs?category=${category}&availability=open`,
-        { signal: controller.signal },
-      );
-      if (!response.ok) throw new Error("Could not load opportunities");
-      const data = await response.json();
-      return Array.isArray(data.jobs) ? (data.jobs as Job[]) : [];
-    };
-    Promise.allSettled([read("jobs"), read("scholarships")]).then((results) => {
-      if (controller.signal.aborted) return;
-      const roles = results[0].status === "fulfilled" ? results[0].value : [];
-      const awards = results[1].status === "fulfilled" ? results[1].value : [];
-      setJobs([
-        ...roles.slice(0, awards.length ? 2 : 3),
-        ...awards.slice(0, 1),
-      ]);
-      setState(
-        results.every((result) => result.status === "rejected")
-          ? "error"
-          : "ready",
-      );
-    });
-    return () => controller.abort();
-  }, []);
-  if (state === "loading")
-    return (
-      <div className="portal-opportunity-loading" role="status">
-        Checking the latest source-linked opportunities…
-      </div>
-    );
+export default async function HomeOpportunities() {
+  const { jobs, unavailable } = await homeOpportunities();
   if (!jobs.length)
     return (
       <div className="portal-opportunity-empty">
         <p>
-          {state === "error"
+          {unavailable
             ? "The latest opportunities could not load here. You can try the full search."
             : "No recently checked opportunities are available in this selection right now."}
         </p>
@@ -74,7 +38,9 @@ export default function HomeOpportunities() {
               sizes="(max-width: 700px) 90vw, 380px"
             />
             <span>
-              {job.category === "scholarships" ? "Scholarship" : "Job in Ghana"}
+              {job.category === "scholarships"
+                ? "Study & research funding"
+                : "Job in Ghana"}
             </span>
           </div>
           <div className="portal-opportunity-body">
@@ -89,7 +55,10 @@ export default function HomeOpportunities() {
               </p>
             ) : null}
             <span className="portal-card-link">
-              Read the full details <span aria-hidden="true"><Icon name="arrow-up-right" /></span>
+              Read the full details{" "}
+              <span aria-hidden="true">
+                <Icon name="arrow-up-right" />
+              </span>
             </span>
           </div>
         </Link>

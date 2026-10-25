@@ -24,3 +24,4 @@ supabase/.temp/
 
 # Local source investigation inputs and reports
 local-source-evidence/
+.source-lab-venv/

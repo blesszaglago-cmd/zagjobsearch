@@ -132,7 +132,20 @@ def salary_facts(body, structured=None):
     }
 
 
+def clean_description(value):
+    """Remove image placeholders while retaining ordinary source links and facts."""
+    value = re.sub(r"!\[([^\]]*)\]\(https?://[^\s)]+\)", r"\1", str(value or ""))
+    value = re.sub(
+        r"\[https?://[^\s\]]+\.(?:png|jpe?g|gif|webp|avif|svg)(?:\?[^\s\]]*)?\]",
+        "",
+        value,
+        flags=re.I,
+    )
+    return re.sub(r"\n[ \t]*\n(?:[ \t]*\n)+", "\n\n", value).strip()
+
+
 def enrich(job, body, structured_salary=None):
+    job["description"] = clean_description(job.get("description", body))
     job.update(salary_facts(body, structured_salary))
     job["search_terms"] = [
         skill
@@ -201,12 +214,14 @@ def deduplicate(jobs):
         providers = [j.get("source_key", j.get("source")) for j in group]
         # Two direct requisitions or multiple posts on the same board are ambiguous.
         if len(direct) > 1 or len(providers) != len(set(providers)):
-            urls = set()
+            urls = {}
             for j in group:
                 u = canonical_url(j["url"])
-                if u not in urls:
-                    out.append(j)
-                    urls.add(u)
+                if u in urls:
+                    j["duplicate_of"] = urls[u]
+                else:
+                    urls[u] = j["id"]
+                out.append(j)
             continue
         group.sort(key=lambda j: j.get("description_kind") == "source_summary")
         primary = group[0]

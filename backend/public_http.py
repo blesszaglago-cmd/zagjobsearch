@@ -12,10 +12,12 @@ import socket
 import ssl
 import time
 import zlib
+from datetime import datetime, timedelta, timezone
 
 import certifi
 import httpcore
 import httpx
+from source_progress import future_time, retry_after_time
 
 SOURCE_HOSTS = frozenset(
     {
@@ -195,19 +197,67 @@ class SourceTransport(httpx.AsyncBaseTransport):
 
 
 class PublicSourceClient:
-    def __init__(self, client, max_bytes=8 * 1024 * 1024):
+    def __init__(self, client, max_bytes=8 * 1024 * 1024, deferred_hosts=None):
         self.client = client
         self.max_bytes = max_bytes
         self.slots = asyncio.Semaphore(24)
         self.hosts = {}
+        self.deferred = {}
+        for host, state in (deferred_hosts or {}).items():
+            if host not in SOURCE_HOSTS or not isinstance(state, dict):
+                continue
+            until = future_time(state.get("until"))
+            if until and state.get("status") in (429, 503):
+                self.deferred[host] = {
+                    "until": until.isoformat(),
+                    "status": state["status"],
+                }
+
+    def deferred_snapshot(self):
+        return {
+            host: state
+            for host, state in self.deferred.items()
+            if future_time(state["until"])
+        }
+
+    def check_deferred(self, target):
+        state = self.deferred.get(target.host)
+        if state and future_time(state["until"]):
+            request = httpx.Request("GET", target)
+            response = httpx.Response(state["status"], request=request)
+            raise httpx.HTTPStatusError(
+                "Publisher retry delay is still active",
+                request=request,
+                response=response,
+            )
 
     async def get(self, url, **kwargs):
         target = source_url(url)
         limit = self.hosts.setdefault(target.host, asyncio.Semaphore(3))
         async with limit, self.slots:
             for attempt in range(2):
+                self.check_deferred(target)
                 try:
                     response = await self._get(target, **kwargs)
+                    now = datetime.now(timezone.utc)
+                    until = retry_after_time(response.headers.get("retry-after"), now)
+                    if response.status_code == 429:
+                        until = max(until or now, now + timedelta(minutes=15))
+                    if (
+                        response.status_code == 429
+                        or response.status_code == 503
+                        and until
+                    ):
+                        existing = future_time(
+                            self.deferred.get(target.host, {}).get("until"), now
+                        )
+                        # Concurrent in-flight replies must never shorten a longer delay.
+                        if not existing or until > existing:
+                            self.deferred[target.host] = {
+                                "until": until.isoformat(),
+                                "status": response.status_code,
+                            }
+                        return response
                     if response.status_code not in (502, 503, 504) or attempt:
                         return response
                 except (httpx.ConnectError, httpx.TimeoutException):

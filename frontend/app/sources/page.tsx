@@ -4,6 +4,7 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { API_URL } from "@/lib/api";
+import { sourceMessages, type SourceDiagnostics } from "@/lib/source-status";
 
 export const metadata: Metadata = {
   title: "Our Ghana job sources",
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/sources" },
 };
 
-type Source = {
+type Source = SourceDiagnostics & {
   key?: string;
   name: string;
   url: string;
@@ -122,6 +123,9 @@ export default async function Sources() {
                     </a>
                   </h3>
                   <p>{source.note}</p>
+                  {sourceMessages(source).map((message) => (
+                    <p key={message}>{message}</p>
+                  ))}
                   <div className="source-card-bottom">
                     {source.state === "ok"
                       ? `${source.accepted ?? 0} eligible records at last check`

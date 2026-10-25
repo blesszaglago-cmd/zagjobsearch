@@ -163,13 +163,26 @@ async def page(client, url):
 class CheckedListings(list):
     """Only verified records; incomplete work must not be reported as healthy."""
 
-    def __init__(self, rows=(), *, failed_checks=0):
+    def __init__(
+        self,
+        rows=(),
+        *,
+        failed_checks=0,
+        diagnostics=None,
+        queued_checks=0,
+        removed_urls=(),
+    ):
         super().__init__(rows)
         self.failed_checks = failed_checks
+        self.diagnostics = diagnostics or {}
+        self.queued_checks = queued_checks
+        self.removed_urls = list(removed_urls)
 
 
 async def checked_batch(awaitables, timeout):
     """Keep completed source checks when a bounded discovery window runs out."""
+    from source_progress import SourceBudgetExceeded
+
     tasks = [asyncio.create_task(work) for work in awaitables]
     if not tasks:
         return []
@@ -184,7 +197,11 @@ async def checked_batch(awaitables, timeout):
         task.cancel()
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return [
-        TimeoutError("Source check budget reached") if task in pending else value
+        (
+            SourceBudgetExceeded("Source check budget reached")
+            if task in pending
+            else value
+        )
         for task, value in zip(tasks, results)
     ]
 
@@ -268,7 +285,10 @@ def parse_current_jobs(soup, url):
     )
 
 
-async def current_jobs(client, archive_page=9):
+async def current_jobs(client, archive_page=9, progress=None):
+    from source_progress import SourceProgress, failure_counts
+
+    progress = progress or SourceProgress()
     started = asyncio.get_running_loop().time()
     base = "https://www.ghanacurrentjobs.com/"
     links = set()
@@ -281,7 +301,7 @@ async def current_jobs(client, archive_page=9):
         timeout=35,
     )
     if all(isinstance(s, Exception) for s in indexes):
-        raise ValueError("Job board unavailable")
+        raise indexes[0]
     failures = sum(isinstance(s, Exception) and not removed(s) for s in indexes)
     for soup in indexes:
         if isinstance(soup, Exception):
@@ -296,13 +316,22 @@ async def current_jobs(client, archive_page=9):
     async def one(url):
         return parse_current_jobs(await page(client, url), url)
 
+    pending, overflow = progress.order("ghana-current-jobs", links)
     result = await checked_batch(
-        (one(u) for u in sorted(links)),
+        (one(u) for u in pending),
         timeout=max(1, 100 - (asyncio.get_running_loop().time() - started)),
     )
     failures += sum(isinstance(j, Exception) and not removed(j) for j in result)
+    progress.finish("ghana-current-jobs", pending, result)
+    diagnostics = failure_counts([x for x in [*indexes, *result] if not removed(x)])
+    if overflow:
+        diagnostics["queue_limit"] = overflow
     return "ghana-current-jobs", CheckedListings(
-        [j for j in result if isinstance(j, dict)], failed_checks=failures
+        [j for j in result if isinstance(j, dict)],
+        failed_checks=failures + overflow,
+        diagnostics=diagnostics,
+        queued_checks=len(progress.pending["ghana-current-jobs"]),
+        removed_urls=[u for u, value in zip(pending, result) if removed(value)],
     )
 
 
@@ -578,9 +607,9 @@ async def telecel(client):
     return "telecel", [j for row in telecel_rows(soup) if (j := parse_telecel(row))]
 
 
-def tasks(client, archive_page=9):
+def tasks(client, archive_page=9, progress=None):
     return [
-        current_jobs(client, archive_page),
+        current_jobs(client, archive_page, progress),
         hireghana(client),
         glmis(client),
         newmont(client),
@@ -588,7 +617,7 @@ def tasks(client, archive_page=9):
     ]
 
 
-async def recheck_tracked(client, rows, present):
+async def recheck_tracked(client, rows, present, queued_urls=()):
     from catalogue import NOW, date
 
     async def one(row):
@@ -598,7 +627,7 @@ async def recheck_tracked(client, rows, present):
         if job.get("deadline") and date(job["deadline"]) < NOW():
             return None
         url = job.get("check_url")
-        if not url:
+        if not url or url in queued_urls:
             return None
         soup = await page(client, url)
         if job["source_key"] == "ghana-current-jobs":

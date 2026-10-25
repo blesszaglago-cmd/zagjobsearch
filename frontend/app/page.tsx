@@ -132,7 +132,15 @@ export default function Home() {
                 </Link>
               </div>
             </div>
-            <HomeOpportunities />
+            <Suspense
+              fallback={
+                <div className="portal-opportunity-loading" role="status">
+                  Checking the latest source-linked opportunities…
+                </div>
+              }
+            >
+              <HomeOpportunities />
+            </Suspense>
             <Suspense fallback={<p>Loading current coverage…</p>}>
               <CoverageOverview />
             </Suspense>

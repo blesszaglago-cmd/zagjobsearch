@@ -147,6 +147,12 @@ def closing(body):
     return min(parsed) if parsed else None
 
 
+def job_deadline(body, provided=None):
+    """Later feed metadata cannot extend an earlier explicit application deadline."""
+    deadlines = [value for value in (date(provided), closing(body)) if value]
+    return min(deadlines) if deadlines else None
+
+
 def classify(title, employment=""):
     t = title.lower()
     e = employment.lower()
@@ -223,7 +229,7 @@ def make_job(
     active_confirmed=False,
     structured_salary=None,
 ):
-    d = date(deadline) or closing(body)
+    d = job_deadline(body, deadline)
     p = date(posted)
     if d and d < NOW():
         return None
@@ -764,26 +770,30 @@ def source_failure(error):
 
 
 class CollectedSources(list):
-    def __init__(self, rows=(), *, failures=None):
+    def __init__(self, rows=(), *, failures=None, progress=None):
         super().__init__(rows)
         self.failures = failures or {}
+        self.progress = progress
 
 
-async def collect(archive_page=9, tracked=None):
+async def collect(archive_page=9, tracked=None, progress=None):
+    from source_progress import SourceProgress
+
+    progress = SourceProgress(progress)
     async with source_client(HEADERS) as http_client:
-        client = PublicSourceClient(http_client)
+        client = PublicSourceClient(http_client, deferred_hosts=progress.hosts)
         tasks = [
             *(smart(client, b) for b in SMART),
             *(greenhouse(client, b) for b in GREENHOUSE),
             scholarships(client),
             mining(client),
-            *ghana_sources.tasks(client, archive_page),
+            *ghana_sources.tasks(client, archive_page, progress),
             *employer_sources.tasks(client),
             *academic_sources.tasks(client),
             *funding_sources.tasks(client),
             *early_career_sources.tasks(client),
             marriott_source.collect(client),
-            jobweb_source.collect(client),
+            jobweb_source.collect(client, progress),
         ]
         names = [
             *["smart:" + b for b in SMART],
@@ -823,13 +833,20 @@ async def collect(archive_page=9, tracked=None):
             present = {j["id"] for _, jobs in collected for j in (jobs or [])}
             try:
                 extra = await asyncio.wait_for(
-                    ghana_sources.recheck_tracked(client, tracked, present), 25
+                    ghana_sources.recheck_tracked(
+                        client,
+                        tracked,
+                        present,
+                        {u for urls in progress.pending.values() for u in urls},
+                    ),
+                    25,
                 )
                 for name, jobs in collected:
                     if jobs is not None:
                         jobs.extend(j for j in extra if j["source_key"] == name)
             except (TimeoutError, httpx.HTTPError):
                 logging.warning("Tracked vacancy recheck deferred")
+        collected.progress = progress.snapshot(client.deferred_snapshot())
         return collected
 
 
@@ -856,10 +873,10 @@ async def refresh():
         return {"refreshed": False, "reason": "Not due"}
     checked = NOW().isoformat()
     try:
-        state = refresh_state()
+        state = refresh_state(include_progress=True)
         archive_page = int(state.get("archive_page") or 9)
         tracked = catalogue_rows("payload")
-        results = await collect(archive_page, tracked)
+        results = await collect(archive_page, tracked, state.get("source_progress"))
     except Exception:
         supabase.table("catalogue_refresh").update(
             {
@@ -872,6 +889,7 @@ async def refresh():
     records = []
     successful = set()
     ids = set()
+    removed_details = set()
     for source, jobs in results:
         if jobs is None:
             summary.append(
@@ -884,6 +902,9 @@ async def refresh():
             )
             continue
         failed_checks = getattr(jobs, "failed_checks", 0)
+        removed_details.update(
+            (source, url) for url in getattr(jobs, "removed_urls", [])
+        )
         if not failed_checks:
             successful.add(source)
         for job in jobs:
@@ -904,6 +925,8 @@ async def refresh():
                 "state": "partial" if failed_checks else "ok",
                 "accepted": len(jobs),
                 "failed_checks": failed_checks,
+                "diagnostics": getattr(jobs, "diagnostics", {}),
+                "queued_checks": getattr(jobs, "queued_checks", 0),
             }
         )
     if records:
@@ -927,12 +950,39 @@ async def refresh():
         - {"jobweb-ghana"}
         and r["id"] not in ids
     ]
+    closed.extend(
+        row["payload"]["id"]
+        for row in tracked
+        if removed_details
+        and (row["payload"].get("source_key"), row["payload"].get("check_url"))
+        in removed_details
+        and row["payload"]["id"] not in ids
+        and row["payload"]["id"] not in closed
+    )
+    # Correct older records even if their source is temporarily unavailable.
+    for row in tracked:
+        job = row.get("payload", {})
+        if job.get("category") not in {"jobs", "early", "remote"}:
+            continue
+        deadline = job_deadline(job.get("description", ""), job.get("deadline"))
+        if (
+            deadline
+            and deadline < NOW()
+            and job["id"] not in ids
+            and job["id"] not in closed
+        ):
+            closed.append(job["id"])
     for offset in range(0, len(closed), 200):
         supabase.table("job_catalogue").update({"status": "closed"}).in_(
             "id", closed[offset : offset + 200]
         ).execute()
     supabase.table("catalogue_refresh").update(
         {
+            **(
+                {"source_progress": results.progress}
+                if getattr(results, "progress", None) is not None
+                else {}
+            ),
             "completed_at": NOW().isoformat(),
             "summary": summary,
             "next_refresh_at": (
@@ -1047,6 +1097,8 @@ def catalogue_sources():
                 "accepted": status.get("accepted", 0) if current else 0,
                 "failed_checks": status.get("failed_checks", 0) if current else 0,
                 "failure": status.get("failure") if current else None,
+                "diagnostics": status.get("diagnostics", {}) if current else {},
+                "queued_checks": status.get("queued_checks", 0) if current else 0,
             }
         )
     external = [
@@ -1060,10 +1112,13 @@ def catalogue_sources():
     }
 
 
-def refresh_state():
+def refresh_state(include_progress=False):
     rows = (
         supabase.table("catalogue_refresh")
-        .select("completed_at,next_refresh_at,summary,last_error,archive_page")
+        .select(
+            "completed_at,next_refresh_at,summary,last_error,archive_page"
+            + (",source_progress" if include_progress else "")
+        )
         .eq("id", 1)
         .execute()
         .data
@@ -1093,6 +1148,10 @@ def query_catalogue(params):
     except ValueError:
         raise HTTPException(400, "Enter a valid page and salary range.")
     result = supabase.rpc("search_ghana_catalogue", {"filters": p}).execute().data
+    from listing_quality import clean_description
+
+    for job in result.get("jobs", []):
+        job["description"] = clean_description(job.get("description", ""))
     return result
 
 
@@ -1209,6 +1268,9 @@ async def catalogue_details(job_id: str, verify: bool = False, request: Request 
         raise HTTPException(404, "Opportunity not found.")
     row = rows[0]
     j = dict(row["payload"])
+    from listing_quality import clean_description
+
+    j["description"] = clean_description(j.get("description", ""))
     j["first_seen_at"] = row["first_seen_at"]
     is_scholarship = j.get("category") == "scholarships"
     if is_scholarship:
@@ -1217,8 +1279,12 @@ async def catalogue_details(job_id: str, verify: bool = False, request: Request 
     if (
         row["status"] != "active"
         or not is_scholarship
-        and row["deadline"]
-        and date(row["deadline"]) < NOW()
+        and (
+            effective_deadline := job_deadline(
+                j.get("description", ""), row["deadline"]
+            )
+        )
+        and effective_deadline < NOW()
     ):
         raise HTTPException(
             410,
@@ -1430,7 +1496,9 @@ async def catalogue_details(job_id: str, verify: bool = False, request: Request 
                         re.I,
                     )
                 )
-                expiry_date = date(expiry.get("content")) if expiry else closing(body)
+                expiry_date = job_deadline(
+                    body, expiry.get("content") if expiry else None
+                )
                 if closed or expiry_date and expiry_date < NOW():
                     supabase.table("job_catalogue").update({"status": "closed"}).eq(
                         "id", job_id
