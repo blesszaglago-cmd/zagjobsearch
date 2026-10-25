@@ -163,3 +163,11 @@ PR #11 is merged and both production deployments are ready. The database schedul
 At that 20 October release, PageSpeed API verification returned HTTP 429 for the shared service quota, so no score was claimed; interactive mobile/accessibility checks and an actual backup restore had not yet been verified. Google/email provider flags were false in production. Subsequent owner checks and the 21 October local application-data restore are recorded above and in `docs/audit-status.md`.
 
 Supabase currently reports one extension-placement advisory for pg_net. Its HTTP functions actually live in the net schema; the extension metadata was registered in public. Automatic approval review rejected drop/recreate relocation because it could interrupt maintenance or invalidate dependencies. The working extension was retained. A proposal is stored in docs/proposals/maintenance-extension-schema.sql, outside the migrations directory; it is not scheduled or automatically applied. Reconsider only after explicit approval and verification in an isolated compatible database. The next fresh installation uses the extensions metadata schema.
+# Source detail progress
+
+The `source_progress_queue` migration must precede deployment of the resumable
+Ghana Current Jobs / Jobweb reader. Retry queues and publisher pauses live in the
+private `catalogue_refresh.source_progress` column. The public Sources page shows
+safe failure categories and queued counts, not queued URLs or raw errors. Confirmed
+detail 404/410 responses retire matching records; timeouts preserve them. See
+[source tools](source-tools.md) for limits, verification and the isolated parser lab.

@@ -138,7 +138,10 @@ def feed_jobs(response):
     return out
 
 
-async def collect(client):
+async def collect(client, progress=None):
+    from source_progress import SourceProgress, failure_counts
+
+    progress = progress or SourceProgress()
     started = asyncio.get_running_loop().time()
     response = await client.get(BASE + "/feed/")
     response.raise_for_status()
@@ -159,7 +162,7 @@ async def collect(client):
     )
     links = set()
     failures, valid_indexes = 0, 0
-    for soup in indexes:
+    for index, soup in enumerate(indexes):
         if isinstance(soup, httpx.HTTPStatusError) and soup.response.status_code in (
             404,
             410,
@@ -171,6 +174,7 @@ async def collect(client):
         lists = soup.select("ol.jobs")
         if not lists:
             failures += 1
+            indexes[index] = ValueError("Job board index changed")
             continue
         valid_indexes += 1
         for listing in lists:
@@ -183,13 +187,15 @@ async def collect(client):
     if not valid_indexes or not links or len(links) > 220:
         raise ValueError("Job board discovery window changed")
     # Details establish the current application window and explicit job type.
-    pending = sorted(links | jobs.keys(), key=lambda u: (len(u), u))
+    pending, overflow = progress.order("jobweb-ghana", links | jobs.keys())
+    # A feed-only row must not publish without a successful detail check.
+    jobs = {}
     details = await checked_batch(
         (page(client, u) for u in pending),
         timeout=max(1, 100 - (asyncio.get_running_loop().time() - started)),
     )
     signatures = {}
-    for url, soup in zip(pending, details):
+    for index, (url, soup) in enumerate(zip(pending, details)):
         if isinstance(soup, httpx.HTTPStatusError) and soup.response.status_code in (
             404,
             410,
@@ -204,6 +210,7 @@ async def collect(client):
             job = parse_detail(soup, url)
         except (ValueError, KeyError, TypeError):
             failures += 1
+            details[index] = ValueError("Job board vacancy detail changed")
             jobs.pop(url, None)
             continue
         if job:
@@ -228,4 +235,14 @@ async def collect(client):
             jobs[url] = job
         else:
             jobs.pop(url, None)
-    return "jobweb-ghana", CheckedListings(jobs.values(), failed_checks=failures)
+    progress.finish("jobweb-ghana", pending, details)
+    diagnostics = failure_counts([x for x in [*indexes, *details] if not removed(x)])
+    if overflow:
+        diagnostics["queue_limit"] = overflow
+    return "jobweb-ghana", CheckedListings(
+        jobs.values(),
+        failed_checks=failures + overflow,
+        diagnostics=diagnostics,
+        queued_checks=len(progress.pending["jobweb-ghana"]),
+        removed_urls=[u for u, value in zip(pending, details) if removed(value)],
+    )

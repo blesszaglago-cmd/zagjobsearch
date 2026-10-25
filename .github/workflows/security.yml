@@ -32,7 +32,11 @@ jobs:
         run: pip-audit -r backend/requirements.lock --no-deps --disable-pip --strict
       - name: Audit optional local restore dependencies
         run: pip-audit -r scripts/requirements-restore.txt --strict
+      - name: Audit isolated source lab dependencies
+        run: pip-audit -r scripts/requirements-source-lab.txt --no-deps --disable-pip --strict
       - name: Scan backend source
         run: bandit -q -r backend -x backend/tests --severity-level medium --confidence-level medium
       - name: Scan local restore helper
         run: bandit -q scripts/restore_backup.py --severity-level medium --confidence-level medium
+      - name: Scan offline source lab
+        run: bandit -q scripts/source_lab.py --severity-level medium --confidence-level medium

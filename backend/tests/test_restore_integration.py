@@ -52,13 +52,84 @@ class RestoreDatabaseTests(unittest.TestCase):
             autocommit=True,
         )
 
+    def test_source_progress_migration_preserves_private_table_access_and_bounds_json(
+        self,
+    ):
+        from pathlib import Path
+        from psycopg.types.json import Jsonb
+
+        with self.connect() as connection:
+            connection.execute(
+                """
+                do $$ begin
+                  if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if;
+                  if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if;
+                  if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role; end if;
+                end $$;
+                create table public.catalogue_refresh(id integer primary key);
+                alter table public.catalogue_refresh enable row level security;
+                grant all on public.catalogue_refresh to service_role;
+                insert into public.catalogue_refresh(id) values(1);
+            """
+            )
+            migration = (
+                Path(__file__).resolve().parents[2]
+                / "supabase/migrations/20261025041956_source_progress_queue.sql"
+            )
+            connection.execute(migration.read_text())
+            self.assertEqual(
+                connection.execute(
+                    "select source_progress from public.catalogue_refresh where id=1"
+                ).fetchone()[0],
+                {},
+            )
+            progress = {
+                "version": 1,
+                "pending": {"jobweb-ghana": ["https://jobwebghana.com/jobs/test/"]},
+                "hosts": {},
+            }
+            connection.execute(
+                "update public.catalogue_refresh set source_progress=%s where id=1",
+                (Jsonb(progress),),
+            )
+            self.assertEqual(
+                connection.execute(
+                    "select source_progress from public.catalogue_refresh where id=1"
+                ).fetchone()[0],
+                progress,
+            )
+            for invalid in [[], {"large": "x" * 1048576}]:
+                with self.assertRaises(self.psycopg.errors.CheckViolation):
+                    connection.execute(
+                        "update public.catalogue_refresh set source_progress=%s where id=1",
+                        (Jsonb(invalid),),
+                    )
+            for role in ["anon", "authenticated"]:
+                self.assertFalse(
+                    connection.execute(
+                        "select has_column_privilege(%s,'public.catalogue_refresh','source_progress','SELECT')",
+                        (role,),
+                    ).fetchone()[0]
+                )
+            self.assertTrue(
+                connection.execute(
+                    "select has_column_privilege('service_role','public.catalogue_refresh','source_progress','UPDATE')"
+                ).fetchone()[0]
+            )
+            self.assertTrue(
+                connection.execute(
+                    "select relrowsecurity from pg_class where oid='public.catalogue_refresh'::regclass"
+                ).fetchone()[0]
+            )
+
     def test_academic_catalogue_migration_filters_windows_and_privileges(self):
         from datetime import datetime, timedelta, timezone
         from pathlib import Path
         from psycopg.types.json import Jsonb
 
         with self.connect() as connection:
-            connection.execute("""
+            connection.execute(
+                """
                 do $$ begin
                   if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if;
                   if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if;
@@ -70,7 +141,8 @@ class RestoreDatabaseTests(unittest.TestCase):
                   last_checked_at timestamptz default now(), deadline timestamptz
                 );
                 alter table public.job_catalogue enable row level security;
-            """)
+            """
+            )
             migration = (
                 Path(__file__).resolve().parents[2]
                 / "supabase/migrations/20261022223645_academic_opportunity_filters.sql"
