@@ -32,6 +32,88 @@ def http_error(status):
 
 
 class ProgressTests(unittest.IsolatedAsyncioTestCase):
+    def test_future_metadata_cannot_extend_an_expired_explicit_closing_date(self):
+        now = datetime(2026, 10, 25, tzinfo=timezone.utc)
+        with patch.object(c, "NOW", return_value=now):
+            job = c.make_job(
+                "test",
+                "1",
+                "Engineer",
+                "Test employer",
+                "Accra, Ghana",
+                "Closing Date 15th October 2026. "
+                + "Support projects and operations. " * 8,
+                "https://example.org/job/1",
+                deadline="2026-10-31",
+            )
+        self.assertIsNone(job)
+        self.assertEqual(
+            c.job_deadline("Closing date: 30 October 2026", "2026-11-01").day, 30
+        )
+        self.assertEqual(
+            c.job_deadline("No explicit closing date", "2026-11-01").day, 1
+        )
+
+    async def test_stored_conflicting_deadline_cannot_be_browsed_or_applied_to(self):
+        from fastapi import HTTPException
+
+        now = datetime(2026, 10, 25, tzinfo=timezone.utc)
+        job = {
+            "id": "a" * 32,
+            "category": "jobs",
+            "description": "Closing date 15 October 2026",
+            "deadline": "2026-10-31",
+        }
+        row = {
+            "payload": job,
+            "status": "active",
+            "deadline": job["deadline"],
+            "first_seen_at": now.isoformat(),
+            "last_checked_at": now.isoformat(),
+        }
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+            row
+        ]
+        for verify in [False, True]:
+            with patch.object(c, "NOW", return_value=now), patch.object(
+                c, "supabase", db
+            ), patch.object(c, "source_client") as client:
+                with self.assertRaises(HTTPException) as error:
+                    await c.catalogue_details(job["id"], verify=verify)
+                self.assertEqual(error.exception.status_code, 410)
+                client.assert_not_called()
+
+    async def test_refresh_retires_old_conflicting_records_when_source_is_unavailable(
+        self,
+    ):
+        now = datetime(2026, 10, 25, tzinfo=timezone.utc)
+        job = {
+            "id": "a" * 32,
+            "source_key": "anglogold",
+            "category": "jobs",
+            "description": "Closing date 15 October 2026",
+            "deadline": "2026-10-31",
+        }
+        db = MagicMock()
+        db.rpc.return_value.execute.return_value.data = True
+        with patch.object(c, "NOW", return_value=now), patch.object(
+            c, "supabase", db
+        ), patch.object(c, "refresh_state", return_value={}), patch.object(
+            c, "collect", AsyncMock(return_value=[("anglogold", None)])
+        ), patch.object(
+            c,
+            "catalogue_rows",
+            side_effect=[
+                [{"payload": job}],
+                [{"id": job["id"], "source_key": "anglogold"}],
+            ],
+        ):
+            await c.refresh()
+        db.table.return_value.update.return_value.in_.assert_called_once_with(
+            "id", [job["id"]]
+        )
+
     def test_restart_retains_unfinished_work_and_admits_new_urls(self):
         p = SourceProgress()
         urls, overflow = p.order("ghana-current-jobs", [BASE + "a/", BASE + "b/"])

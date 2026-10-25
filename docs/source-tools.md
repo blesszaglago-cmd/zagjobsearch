@@ -34,6 +34,11 @@ merely by finding text on a page.
   canonical-URL duplicates retain all database IDs and mark secondary records,
   preventing a missing-ID failure during refresh upserts. Distinct employer
   requisitions still remain separate.
+- A later metadata expiry cannot extend an earlier explicitly labelled closing
+  date in a job description. Existing contradictory expired records are retired
+  during refresh even when their source is unavailable, and detail/Apply requests
+  reject them immediately. This deliberately withholds uncertain opportunities
+  until the source advert is corrected or a fresh check confirms a valid window.
 
 Deploy the additive `source_progress_queue` migration before the new backend.
 It adds a private column to the existing RLS-protected table and does not grant

@@ -147,6 +147,12 @@ def closing(body):
     return min(parsed) if parsed else None
 
 
+def job_deadline(body, provided=None):
+    """Later feed metadata cannot extend an earlier explicit application deadline."""
+    deadlines = [value for value in (date(provided), closing(body)) if value]
+    return min(deadlines) if deadlines else None
+
+
 def classify(title, employment=""):
     t = title.lower()
     e = employment.lower()
@@ -223,7 +229,7 @@ def make_job(
     active_confirmed=False,
     structured_salary=None,
 ):
-    d = date(deadline) or closing(body)
+    d = job_deadline(body, deadline)
     p = date(posted)
     if d and d < NOW():
         return None
@@ -953,6 +959,19 @@ async def refresh():
         and row["payload"]["id"] not in ids
         and row["payload"]["id"] not in closed
     )
+    # Correct older records even if their source is temporarily unavailable.
+    for row in tracked:
+        job = row.get("payload", {})
+        if job.get("category") not in {"jobs", "early", "remote"}:
+            continue
+        deadline = job_deadline(job.get("description", ""), job.get("deadline"))
+        if (
+            deadline
+            and deadline < NOW()
+            and job["id"] not in ids
+            and job["id"] not in closed
+        ):
+            closed.append(job["id"])
     for offset in range(0, len(closed), 200):
         supabase.table("job_catalogue").update({"status": "closed"}).in_(
             "id", closed[offset : offset + 200]
@@ -1260,8 +1279,12 @@ async def catalogue_details(job_id: str, verify: bool = False, request: Request 
     if (
         row["status"] != "active"
         or not is_scholarship
-        and row["deadline"]
-        and date(row["deadline"]) < NOW()
+        and (
+            effective_deadline := job_deadline(
+                j.get("description", ""), row["deadline"]
+            )
+        )
+        and effective_deadline < NOW()
     ):
         raise HTTPException(
             410,
@@ -1473,7 +1496,9 @@ async def catalogue_details(job_id: str, verify: bool = False, request: Request 
                         re.I,
                     )
                 )
-                expiry_date = date(expiry.get("content")) if expiry else closing(body)
+                expiry_date = job_deadline(
+                    body, expiry.get("content") if expiry else None
+                )
                 if closed or expiry_date and expiry_date < NOW():
                     supabase.table("job_catalogue").update({"status": "closed"}).eq(
                         "id", job_id
